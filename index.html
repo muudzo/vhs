@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Riddle Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        #riddle-container {
+            background-color: #f0f0f0;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div id="riddle-container">
+        <h2 id="riddle-text">Loading riddle...</h2>
+        <p id="answer-text" style="display: none;"></p>
+    </div>
+    <button onclick="loadNewRiddle()">New Riddle</button>
+    <button onclick="revealAnswer()">Reveal Answer</button>
+
+    <script>
+        // Fetch and display a random riddle when page loads
+        window.onload = fetchRiddle;
+
+        function fetchRiddle() {
+            fetch('http://localhost:8080/random')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    document.getElementById('riddle-text').textContent = data.riddle;
+                    document.getElementById('answer-text').textContent = `Answer: ${data.answer}`;
+                    document.getElementById('answer-text').style.display = 'none';
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    document.getElementById('riddle-text').textContent = 'Failed to load riddle. Please try again.';
+                });
+        }
+
+        function loadNewRiddle() {
+            document.getElementById('riddle-text').textContent = 'Loading new riddle...';
+            fetchRiddle();
+        }
+
+        function revealAnswer() {
+            document.getElementById('answer-text').style.display = 'block';
+        }
+    </script>
+</body>
+</html>
