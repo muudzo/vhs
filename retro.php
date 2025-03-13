@@ -1,3 +1,64 @@
+<?php
+session_start();
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    handleGuessSubmission();
+} else if (isset($_GET['action']) && $_GET['action'] === 'new-riddle') {
+    fetchRandomRiddle();
+} else {
+    displayFullPage();
+}
+
+function handleGuessSubmission() {
+    $data = json_decode(file_get_contents('php://input'), true);
+    $guess = isset($data['guess']) ? trim($data['guess']) : '';
+    
+    $correctAnswer = isset($_SESSION['correct_answer']) ? $_SESSION['correct_answer'] : '';
+    $isCorrect = strcasecmp($guess, $correctAnswer) === 0;
+    
+    header('Content-Type: application/json');
+    echo json_encode(['correct' => $isCorrect]);
+    exit;
+}
+
+function fetchRandomRiddle() {
+    $servername = "localhost";
+    $username = "root";
+    $password = "Mudzo2608";
+    $dbname = "80s_video_store";
+
+    try {
+        $pdo = new PDO("mysql:host=$servername;dbname=$dbname;charset=utf8", $username, $password);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+        $query = "SELECT question, answer FROM riddles ORDER BY RAND() LIMIT 1";
+        $stmt = $pdo->prepare($query);
+        $stmt->execute();
+
+        $riddle = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($riddle) {
+            $trimmedAnswer = trim($riddle['answer']);
+            $_SESSION['correct_answer'] = $trimmedAnswer;
+            
+            header('Content-Type: application/json');
+            echo json_encode([
+                'riddle' => $riddle['question'],
+                'answerLength' => strlen($trimmedAnswer)
+            ]);
+        } else {
+            http_response_code(404);
+            echo json_encode(['error' => 'No riddles found']);
+        }
+    } catch (PDOException $e) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
+    }
+    exit;
+}
+
+function displayFullPage() {
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -176,3 +237,6 @@
     </script>
 </body>
 </html>
+<?php
+}
+?>
