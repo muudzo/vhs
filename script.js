@@ -1,3 +1,35 @@
+// Set the passcode that unlocks the game
+const unlockPasscode = "openSesame";
+
+// Called when the page loads
+window.onload = function() {
+  checkPasscode();
+};
+
+// Function that prompts the user for a passcode
+function checkPasscode() {
+  const userInput = prompt("Enter the passcode to unlock the game:");
+  
+  if (userInput === unlockPasscode) {
+    // Correct passcode: Start the game
+    alert("Access granted! Welcome to the game.");
+    startGame();
+  } else {
+    // Incorrect passcode: Ask again
+    alert("Incorrect passcode. Please try again.");
+    checkPasscode();
+  }
+}
+
+// Function to initialize your game logic
+function startGame() {
+  // Load the first riddle or game state
+  fetchRiddle();
+}
+
+
+
+
 let answerLength = 0;
 
 window.onload = fetchRiddle;
