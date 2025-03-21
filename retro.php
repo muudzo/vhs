@@ -77,6 +77,50 @@ function displayFullPage() {
       box-shadow: inset 0 0 50px rgba(0, 255, 0, 0.1);
       position: relative;
       overflow: hidden;
+      text-align: center;
+    }
+    #password-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      z-index: 10;
+    }
+    #password-screen input {
+      background: #000;
+      border: 2px solid #0f0;
+      color: #0f0;
+      padding: 10px;
+      font-family: 'Courier New', monospace;
+      font-size: 16px;
+      text-align: center;
+      width: 200px;
+      margin: 10px;
+    }
+    #password-screen button {
+      background: #000;
+      border: 2px solid #0f0;
+      color: #0f0;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    #password-screen button:hover {
+      background: #0f0;
+      color: #000;
+    }
+    #password-error {
+      color: red;
+      margin-top: 10px;
+    }
+    #game-container {
+      display: none;
     }
     #riddle-container {
       background-color: #001100;
@@ -84,10 +128,6 @@ function displayFullPage() {
       border: 2px dashed #0f0;
       margin-bottom: 20px;
       text-shadow: 0 0 5px #0f0;
-    }
-    #guess-container {
-      margin-bottom: 20px;
-      position: relative;
     }
     input[type="text"] {
       background: #000;
@@ -98,17 +138,13 @@ function displayFullPage() {
       font-size: 16px;
       width: 300px;
       margin: 10px 0;
-    }
-    input[type="text"]:focus {
-      outline: none;
-      box-shadow: 0 0 10px #0f0;
+      text-align: center;
     }
     button {
       background: #000;
       border: 2px solid #0f0;
       color: #0f0;
       padding: 10px 20px;
-      font-family: 'Courier New', monospace;
       font-size: 16px;
       cursor: pointer;
       transition: all 0.3s ease;
@@ -119,143 +155,96 @@ function displayFullPage() {
       color: #000;
     }
     #result {
-      border-left: 3px solid #0f0;
-      padding-left: 10px;
       margin: 20px 0;
       color: #0f0;
-    }
-    .answer-length {
-      color: #0f0;
-      font-size: 0.9em;
-      margin-top: 5px;
-    }
-    @keyframes scanline {
-      0% { transform: translateY(-100%); }
-      100% { transform: translateY(100%); }
-    }
-    body::after {
-      content: "";
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(
-        to bottom,
-        rgba(0, 0, 0, 0.1) 50%,
-        rgba(0, 0, 0, 0.2) 50%
-      );
-      background-size: 100% 4px;
-      pointer-events: none;
-      animation: scanline 4s linear infinite;
-    }
-    body::before {
-      content: "";
-      position: fixed;
-      top: -50%;
-      left: -50%;
-      width: 200%;
-      height: 200%;
-      background: radial-gradient(circle, transparent 60%, rgba(0, 15, 0, 0.8));
-      pointer-events: none;
     }
   </style>
 </head>
 <body>
-  <div id="riddle-container">
-      <h2 id="riddle-text">INITIALIZING RIDDLE MODULE...</h2>
-      <div class="answer-length" id="answer-length"></div>
+
+  <div id="password-screen">
+    <h2>ENTER ACCESS CODE</h2>
+    <input type="password" id="password-input" placeholder="ACCESS CODE">
+    <button onclick="checkPasscode()">ENTER</button>
+    <div id="password-error"></div>
   </div>
-  
-  <div id="guess-container">
-      <input type="text" id="guess-input" placeholder="ENTER GUESS" />
-      <button onclick="submitGuess()">EXECUTE GUESS</button>
+
+  <div id="game-container">
+    <div id="riddle-container">
+        <h2 id="riddle-text">INITIALIZING RIDDLE MODULE...</h2>
+        <div class="answer-length" id="answer-length"></div>
+    </div>
+    
+    <div id="guess-container">
+        <input type="text" id="guess-input" placeholder="ENTER GUESS" />
+        <button onclick="submitGuess()">EXECUTE GUESS</button>
+    </div>
+    
+    <button onclick="loadNewRiddle()">NEW RIDDLE</button>
+    <div id="result"></div>
   </div>
-  
-  <button onclick="loadNewRiddle()">NEW RIDDLE PROTOCOL</button>
-  <div id="result"></div>
 
   <script>
-    // Set the passcode that unlocks the game
     const unlockPasscode = "1234";
-
-    // Global variable to store the required answer length
     let answerLength = 0;
 
-    // When the page loads, prompt for the passcode
-    window.onload = checkPasscode;
-
     function checkPasscode() {
-      const userInput = prompt("Enter the passcode to unlock the game:");
+      const userInput = document.getElementById('password-input').value;
       if (userInput === unlockPasscode) {
-        alert("Access granted! Welcome to the game.");
+        document.getElementById('password-screen').style.display = "none";
+        document.getElementById('game-container').style.display = "block";
         startGame();
       } else {
-        alert("Incorrect passcode. Please try again.");
-        checkPasscode();
+        document.getElementById('password-error').textContent = "!!! ACCESS DENIED !!!";
       }
     }
 
     function startGame() {
-      // Start by fetching the first riddle
-      fetchRiddle();
+        fetchRiddle();
     }
 
     function fetchRiddle() {
-      fetch("?action=new-riddle")
-        .then(response => {
-          if (!response.ok) throw new Error('NETWORK FAILURE');
-          return response.json();
-        })
-        .then(data => {
-          document.getElementById('riddle-text').textContent = data.riddle;
-          answerLength = data.answerLength;
-          const guessInput = document.getElementById('guess-input');
-          guessInput.maxLength = answerLength;
-          guessInput.placeholder = `ENTER ${answerLength}-CHARACTER SEQUENCE`;
-          document.getElementById('answer-length').textContent = `[REQUIRED LENGTH: ${answerLength}]`;
-          document.getElementById('result').textContent = '';
-          guessInput.value = '';
-        })
-        .catch(error => {
-          console.error('ERROR:', error);
-          document.getElementById('riddle-text').textContent = 'SYSTEM MALFUNCTION - RETRY';
-        });
+        fetch("?action=new-riddle")
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('riddle-text').textContent = data.riddle;
+                answerLength = data.answerLength;
+                const guessInput = document.getElementById('guess-input');
+                guessInput.maxLength = answerLength;
+                guessInput.placeholder = `ENTER ${answerLength}-CHARACTER SEQUENCE`;
+                document.getElementById('answer-length').textContent = `[REQUIRED LENGTH: ${answerLength}]`;
+                document.getElementById('result').textContent = '';
+                guessInput.value = '';
+            })
+            .catch(error => {
+                document.getElementById('riddle-text').textContent = 'SYSTEM MALFUNCTION - RETRY';
+            });
     }
 
     function loadNewRiddle() {
-      document.getElementById('riddle-text').textContent = 'ACCESSING RIDDLE DATABASE...';
-      fetchRiddle();
+        document.getElementById('riddle-text').textContent = 'ACCESSING RIDDLE DATABASE...';
+        fetchRiddle();
     }
 
     function submitGuess() {
-      const guess = document.getElementById('guess-input').value;
-      
-      if (guess.trim().length !== answerLength) {
-        alert(`INPUT MUST BE ${answerLength} CHARACTERS`);
-        return;
-      }
-      
-      fetch("", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ guess: guess })
-      })
-      .then(response => {
-        if (!response.ok) throw new Error("TRANSMISSION ERROR");
-        return response.json();
-      })
-      .then(data => {
-        document.getElementById('result').textContent = data.correct 
-          ? "+++ ACCESS GRANTED +++" 
-          : "!!! INTRUDER ALERT !!!";
-      })
-      .catch(error => {
-        console.error("ERROR:", error);
-        document.getElementById('result').textContent = "SYSTEM ERROR";
-      });
+        const guess = document.getElementById('guess-input').value;
+        if (guess.trim().length !== answerLength) {
+            alert(`INPUT MUST BE ${answerLength} CHARACTERS`);
+            return;
+        }
+
+        fetch("", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ guess: guess })
+        })
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('result').textContent = data.correct ? "+++ ACCESS GRANTED +++" : "!!! INTRUDER ALERT !!!";
+        });
     }
   </script>
+
 </body>
 </html>
 <?php

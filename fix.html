@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mastermind UI - In-Place Feedback</title>
+  <style>
+    body {
+      font-family: 'Courier New', Courier, monospace;
+      background-color: #000;
+      color: #0f0;
+      max-width: 50rem;
+      margin: 0 auto;
+      padding: 1.25rem;
+      line-height: 1.5;
+      box-shadow: inset 0 0 3.125rem rgba(0, 255, 0, 0.1);
+      position: relative;
+      overflow: hidden;
+    }
+    #riddle-container {
+      background-color: #001100;
+      padding: 1.25rem;
+      border: 0.125rem dashed #0f0;
+      margin-bottom: 1.25rem;
+      text-shadow: 0 0 0.3125rem #0f0;
+    }
+    #guess-container {
+      margin-bottom: 1.25rem;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    /* Input boxes which double as both input and feedback display */
+    .digit-input {
+      background: #000;
+      border: 0.125rem solid #0f0;
+      color: #0f0;
+      padding: 0.625rem;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 1rem;
+      width: 3rem;
+      margin: 0.625rem;
+      text-align: center;
+      transition: all 0.3s ease;
+    }
+    .digit-input:focus {
+      outline: none;
+      box-shadow: 0 0 0.625rem #0f0;
+    }
+    button {
+      background: #000;
+      border: 0.125rem solid #0f0;
+      color: #0f0;
+      padding: 0.625rem 1.25rem;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin: 0.3125rem;
+    }
+    button:hover {
+      background: #0f0;
+      color: #000;
+    }
+    #result {
+      border-left: 0.1875rem solid #0f0;
+      padding-left: 0.625rem;
+      margin: 1.25rem 0;
+      color: #0f0;
+      text-align: center;
+    }
+    @keyframes scanline {
+      0% { transform: translateY(-100%); }
+      100% { transform: translateY(100%); }
+    }
+    body::after {
+      content: "";
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(
+          to bottom,
+          rgba(0, 0, 0, 0.1) 50%,
+          rgba(0, 0, 0, 0.2) 50%
+      );
+      background-size: 100% 4px;
+      pointer-events: none;
+      animation: scanline 4s linear infinite;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, transparent 60%, rgba(0, 15, 0, 0.8));
+      pointer-events: none;
+    }
+    /* Feedback colors applied to input boxes */
+    .green { 
+      background-color: #0f0 !important;
+      border-color: #0f0 !important;
+      color: #000 !important;
+    }
+    .yellow { 
+      background-color: #ff0 !important;
+      border-color: #ff0 !important;
+      color: #000 !important;
+    }
+    .gray { 
+      background-color: #333 !important;
+      border-color: #666 !important;
+      color: #0f0;
+    }
+  </style>
+</head>
+<body>
+  <div id="riddle-container">
+    <h1>Mastermind UI</h1>
+    <p>Enter the secret digit code below</p>
+  </div>
+  <div id="guess-container">
+    <!-- Container for digit input boxes -->
+    <div id="guess-inputs"></div>
+    <button onclick="submitGuess()">SUBMIT GUESS</button>
+  </div>
+  <div id="result"></div>
+  <script>
+    // Set the secret digit code. Change this as needed.
+    const secretCode = "1234";
+    let attempts = 0;
+    const maxAttempts = 5;
+    
+    const guessInputsContainer = document.getElementById('guess-inputs');
+    const resultDiv = document.getElementById('result');
+    
+    // Generate input boxes for each digit.
+    function generateInputBoxes(length) {
+      guessInputsContainer.innerHTML = '';
+      for (let i = 0; i < length; i++) {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.maxLength = 1;
+        input.id = `digit${i}`;
+        input.classList.add('digit-input');
+        input.pattern = '\\d';
+        input.inputMode = 'numeric';
+        guessInputsContainer.appendChild(input);
+      }
+      // Auto focus on next input when a digit is entered.
+      const inputs = document.querySelectorAll('#guess-inputs .digit-input');
+      inputs.forEach((input, index) => {
+        input.addEventListener('input', () => {
+          if (input.value.length === 1 && index < inputs.length - 1) {
+            inputs[index + 1].focus();
+          }
+        });
+      });
+    }
+    
+    // Check the guess against the secret code.
+    // Returns an array of feedback strings: "green", "yellow", or "gray".
+    function checkGuess(guess, code) {
+      const feedback = [];
+      const codeArr = code.split('');
+      const guessArr = guess.split('');
+      const matched = new Array(codeArr.length).fill(false);
+      
+      // First pass: mark correct digit and correct position.
+      guessArr.forEach((digit, index) => {
+        if (digit === codeArr[index]) {
+          feedback[index] = 'green';
+          matched[index] = true;
+        }
+      });
+      
+      // Second pass: mark correct digit in wrong position.
+      guessArr.forEach((digit, index) => {
+        if (feedback[index] !== 'green') {
+          const foundIndex = codeArr.findIndex((d, i) => !matched[i] && d === digit);
+          if (foundIndex !== -1) {
+            feedback[index] = 'yellow';
+            matched[foundIndex] = true;
+          } else {
+            feedback[index] = 'gray';
+          }
+        }
+      });
+      
+      return feedback;
+    }
+    
+    // Update each input box with its corresponding feedback.
+    // If an input receives "green" feedback, disable it so it cannot be changed.
+    function updateInputFeedback(feedback, guess) {
+      for (let i = 0; i < feedback.length; i++) {
+        const input = document.getElementById(`digit${i}`);
+        // Remove previous feedback classes.
+        input.classList.remove('green', 'yellow', 'gray');
+        input.classList.add(feedback[i]);
+        input.value = guess[i];
+        // If the digit is correct, disable the input.
+        if (feedback[i] === 'green') {
+          input.disabled = true;
+        }
+      }
+    }
+    
+    // Process the user's guess.
+    function submitGuess() {
+      let guess = '';
+      for (let i = 0; i < secretCode.length; i++) {
+        const digit = document.getElementById(`digit${i}`).value;
+        guess += digit || '';
+      }
+      guess = guess.trim();
+      
+      if (guess.length !== secretCode.length) {
+        resultDiv.textContent = `ENTER A ${secretCode.length}-DIGIT CODE`;
+        return;
+      }
+      
+      const feedback = checkGuess(guess, secretCode);
+      updateInputFeedback(feedback, guess);
+      
+      attempts++;
+      if (guess === secretCode) {
+        resultDiv.textContent = 'ACCESS GRANTED! CODE UNLOCKED!';
+      } else if (attempts >= maxAttempts) {
+        resultDiv.textContent = `GAME OVER! THE CODE WAS: ${secretCode}`;
+      } else {
+        resultDiv.textContent = `ATTEMPT ${attempts} of ${maxAttempts}`;
+      }
+    }
+    
+    // Initial setup.
+    generateInputBoxes(secretCode.length);
+  </script>
+</body>
+</html>
