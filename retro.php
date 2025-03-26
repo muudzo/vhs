@@ -5,7 +5,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     handleGuessSubmission();
 } else if (isset($_GET['action']) && $_GET['action'] === 'new-riddle') {
     fetchRandomRiddle();
-} else {
+}  else if (isset($_GET['action']) && $_GET['action'] === 'get-collected-pins') {
+  
+  getCollectedPins();
+}else {
     displayFullPage();
 }
 
@@ -15,9 +18,28 @@ function handleGuessSubmission() {
     
     $correctAnswer = isset($_SESSION['correct_answer']) ? $_SESSION['correct_answer'] : '';
     $isCorrect = strcasecmp($guess, $correctAnswer) === 0;
+
+     // Track pins when guess is correct
+     if ($isCorrect) {
+      $currentPin = isset($_SESSION['current_riddle_pin']) ? $_SESSION['current_riddle_pin'] : null;
+      
+      //  Initialize collected pins array
+      if (!isset($_SESSION['collected_pins'])) {
+          $_SESSION['collected_pins'] = [];
+      }
+      
+      //  Add pin if not already collected
+      if ($currentPin && !in_array($currentPin, $_SESSION['collected_pins'])) {
+          $_SESSION['collected_pins'][] = $currentPin;
+      }
+  }
     
     header('Content-Type: application/json');
-    echo json_encode(['correct' => $isCorrect]);
+    
+    echo json_encode([
+        'correct' => $isCorrect
+        'pin' => $isCorrect ? $currentPin : null
+    ]);
     exit;
 }
 
