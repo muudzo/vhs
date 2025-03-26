@@ -5,10 +5,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     handleGuessSubmission();
 } else if (isset($_GET['action']) && $_GET['action'] === 'new-riddle') {
     fetchRandomRiddle();
-}  else if (isset($_GET['action']) && $_GET['action'] === 'get-collected-pins') {
-  
-  getCollectedPins();
-}else {
+    //collect pin and store in session
+} else if (isset($_GET['action']) && $_GET['action'] === 'get-collected-pins') {
+    getCollectedPins();
+} else {
     displayFullPage();
 }
 
@@ -18,26 +18,25 @@ function handleGuessSubmission() {
     
     $correctAnswer = isset($_SESSION['correct_answer']) ? $_SESSION['correct_answer'] : '';
     $isCorrect = strcasecmp($guess, $correctAnswer) === 0;
-
-     // Track pins when guess is correct
-     if ($isCorrect) {
-      $currentPin = isset($_SESSION['current_riddle_pin']) ? $_SESSION['current_riddle_pin'] : null;
-      
-      //  Initialize collected pins array
-      if (!isset($_SESSION['collected_pins'])) {
-          $_SESSION['collected_pins'] = [];
-      }
-      
-      //  Add pin if not already collected
-      if ($currentPin && !in_array($currentPin, $_SESSION['collected_pins'])) {
-          $_SESSION['collected_pins'][] = $currentPin;
-      }
-  }
+    
+    // If guess is correct, track the pin
+    if ($isCorrect) {
+        $currentPin = isset($_SESSION['current_riddle_pin']) ? $_SESSION['current_riddle_pin'] : null;
+        
+        // starting  collected pins array if not exists
+        if (!isset($_SESSION['collected_pins'])) {
+            $_SESSION['collected_pins'] = [];
+        }
+        
+        // Add pin if not already collected
+        if ($currentPin && !in_array($currentPin, $_SESSION['collected_pins'])) {
+            $_SESSION['collected_pins'][] = $currentPin;
+        }
+    }
     
     header('Content-Type: application/json');
-    
     echo json_encode([
-        'correct' => $isCorrect
+        'correct' => $isCorrect,
         'pin' => $isCorrect ? $currentPin : null
     ]);
     exit;
@@ -53,7 +52,13 @@ function fetchRandomRiddle() {
         $pdo = new PDO("mysql:host=$servername;dbname=$dbname;charset=utf8", $username, $password);
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-        $query = "SELECT question, answer FROM riddles ORDER BY RAND() LIMIT 1";
+        // Exclude already collected pins
+        $collectedPins = isset($_SESSION['collected_pins']) ? $_SESSION['collected_pins'] : [];
+        $pinCondition = $collectedPins ? "AND pin NOT IN (" . implode(',', $collectedPins) . ")" : "";
+
+        $query = "SELECT question, answer, pin FROM riddles 
+                  WHERE pin != 0 $pinCondition 
+                  ORDER BY RAND() LIMIT 1";
         $stmt = $pdo->prepare($query);
         $stmt->execute();
 
@@ -62,20 +67,31 @@ function fetchRandomRiddle() {
         if ($riddle) {
             $trimmedAnswer = trim($riddle['answer']);
             $_SESSION['correct_answer'] = $trimmedAnswer;
+            $_SESSION['current_riddle_pin'] = $riddle['pin'];
             
             header('Content-Type: application/json');
             echo json_encode([
                 'riddle' => $riddle['question'],
-                'answerLength' => strlen($trimmedAnswer)
+                'answerLength' => strlen($trimmedAnswer),
+                'pin' => $riddle['pin']
             ]);
         } else {
+            // If no more unique pins are available
             http_response_code(404);
-            echo json_encode(['error' => 'No riddles found']);
+            echo json_encode(['error' => 'No more unique riddles available']);
         }
     } catch (PDOException $e) {
         http_response_code(500);
         echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
     }
+    exit;
+}
+
+function getCollectedPins() {
+    $collectedPins = isset($_SESSION['collected_pins']) ? $_SESSION['collected_pins'] : [];
+    
+    header('Content-Type: application/json');
+    echo json_encode(['collected_pins' => $collectedPins]);
     exit;
 }
 
@@ -88,7 +104,7 @@ function displayFullPage() {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Retro Riddle Terminal</title>
   <style>
-    body {
+     body {
       font-family: 'Courier New', monospace;
       background-color: #000;
       color: #0f0;
@@ -180,6 +196,10 @@ function displayFullPage() {
       margin: 20px 0;
       color: #0f0;
     }
+    #pin-container {
+      margin-top: 20px;
+      color: #0f0;
+    }
   </style>
 </head>
 <body>
@@ -204,11 +224,16 @@ function displayFullPage() {
     
     <button onclick="loadNewRiddle()">NEW RIDDLE</button>
     <div id="result"></div>
+    
+    <div id="pin-container">
+        <h3>COLLECTED PINS: <span id="collected-pins">NONE</span></h3>
+    </div>
   </div>
 
   <script>
     const unlockPasscode = "1234";
     let answerLength = 0;
+    let collectedPins = [];
 
     function checkPasscode() {
       const userInput = document.getElementById('password-input').value;
@@ -222,7 +247,22 @@ function displayFullPage() {
     }
 
     function startGame() {
+        fetchCollectedPins();
         fetchRiddle();
+    }
+
+    function fetchCollectedPins() {
+        fetch("?action=get-collected-pins")
+            .then(response => response.json())
+            .then(data => {
+                collectedPins = data.collected_pins;
+                updateCollectedPinsDisplay();
+            });
+    }
+
+    function updateCollectedPinsDisplay() {
+        const pinDisplay = document.getElementById('collected-pins');
+        pinDisplay.textContent = collectedPins.length > 0 ? collectedPins.join(', ') : 'NONE';
     }
 
     function fetchRiddle() {
@@ -262,7 +302,12 @@ function displayFullPage() {
         })
         .then(response => response.json())
         .then(data => {
-            document.getElementById('result').textContent = data.correct ? "+++ ACCESS GRANTED +++" : "!!! INTRUDER ALERT !!!";
+            if (data.correct) {
+                document.getElementById('result').textContent = "+++ ACCESS GRANTED +++";
+                fetchCollectedPins(); // Update collected pins
+            } else {
+                document.getElementById('result').textContent = "!!! INTRUDER ALERT !!!";
+            }
         });
     }
   </script>
