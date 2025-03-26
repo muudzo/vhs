@@ -4,6 +4,66 @@ let maxAttempts = 5;
 const guessInputContainer = document.getElementById('guess-inputs');
 const resultDiv = document.getElementById('result');
 
+// Pusher Manager (Handles Connection & Messaging)
+var PusherManager = {
+    CHANNEL_ID: "blockbuster",
+    pusher: null,
+    presenceChannel: null,
+    sUserID: "",
+
+    init: function () {
+        Pusher.logToConsole = true;
+
+        this.pusher = new Pusher('34aeee625e438241557b', {
+            cluster: 'eu',
+            forceTLS: true,
+            authEndpoint: 'https://interactionfigure.nl/nhl/blockbusterauth/pusher_auth.php'
+        });
+
+        this.connectToChannel();
+    },
+
+    connectToChannel: function () {
+        this.presenceChannel = this.pusher.subscribe('presence-' + this.CHANNEL_ID);
+        this.presenceChannel.bind('pusher:subscription_succeeded', this.onSubscriptionSucceeded.bind(this));
+    },
+
+    onSubscriptionSucceeded: function (_data) {
+        this.sUserID = _data.myID + "";
+        this.presenceChannel.bind('client-messagetochannel', this.onMessageFromOtherPlayer.bind(this));
+    },
+
+    sendMessageToChannel: function (_msg) {
+        if (this.presenceChannel) {
+            this.presenceChannel.trigger('client-messagetochannel', _msg);
+            console.log("Message sent:", _msg);
+        } else {
+            console.warn("Pusher channel not ready");
+        }
+    },
+
+    onMessageFromOtherPlayer: function (_msg) {
+        console.log('Received message:', _msg);
+    }
+};
+
+// Game play (Handles Gameplay & Pusher Message Trigger)
+const GameManager = {
+    onGameFinishClicked: function () {
+        PusherManager.sendMessageToChannel({
+            msg: 'Game Finished!',
+            gameID: "12345"
+        });
+
+        document.getElementById('game').classList.remove('--show');
+        document.getElementById('result').classList.add('--show');
+    }
+};
+
+// Initialize Pusher Connection
+PusherManager.init();
+
+//  Generate Input Fields
 function generateInputBoxes(length) {
     guessInputContainer.innerHTML = '';
     for (let i = 0; i < length; i++) {
@@ -18,6 +78,7 @@ function generateInputBoxes(length) {
     setupInputListeners();
 }
 
+//  Set Up Input Behavior
 function setupInputListeners() {
     const inputs = document.querySelectorAll('.digit-input');
     inputs.forEach((input, index) => {
@@ -27,6 +88,7 @@ function setupInputListeners() {
                 inputs[index + 1].focus();
             }
         });
+
         input.addEventListener('keydown', (event) => {
             if (event.key === 'Backspace' && input.value === '' && index > 0) {
                 inputs[index - 1].focus();
@@ -35,6 +97,7 @@ function setupInputListeners() {
     });
 }
 
+//  Check & Process Guess
 function submitGuess() {
     let guess = "";
     for (let i = 0; i < secretCode.length; i++) {
@@ -48,8 +111,19 @@ function submitGuess() {
     const feedback = checkGuess(guess, secretCode);
     const isCorrect = updateInputFeedback(feedback, guess);
     attempts++;
+
     if (isCorrect) {
         resultDiv.textContent = 'ACCESS GRANTED! CODE UNLOCKED!';
+        
+        // Trigger Pusher message on win
+        PusherManager.sendMessageToChannel({
+            msg: 'Game Finished!',
+            gameID: "12345"
+        });
+
+        // Disable further input
+        document.getElementById('guess-inputs').style.display = 'none';
+
     } else if (attempts >= maxAttempts) {
         resultDiv.textContent = `GAME OVER! THE CODE WAS: ${secretCode}`;
     } else {
@@ -57,10 +131,12 @@ function submitGuess() {
     }
 }
 
+//  Compare Guess to Secret Code
 function checkGuess(guess, code) {
     return Array.from(guess).map((digit, index) => digit === code[index] ? 'green' : code.includes(digit) ? 'yellow' : 'gray');
 }
 
+// Update Input Feedback
 function updateInputFeedback(feedback, guess) {
     const allCorrect = feedback.every(f => f === 'green');
     feedback.forEach((status, index) => {
@@ -73,4 +149,5 @@ function updateInputFeedback(feedback, guess) {
     return allCorrect;
 }
 
+//  Start the game
 generateInputBoxes(secretCode.length);
