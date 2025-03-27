@@ -3,13 +3,37 @@ session_start();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     handleGuessSubmission();
-} else if (isset($_GET['action']) && $_GET['action'] === 'new-riddle') {
-    fetchRandomRiddle();
-    //collect pin and store in session
-} else if (isset($_GET['action']) && $_GET['action'] === 'get-collected-pins') {
-    getCollectedPins();
+} else if (isset($_GET['action'])) {
+    switch ($_GET['action']) {
+        case 'new-riddle':
+            fetchRandomRiddle();
+            break;
+        case 'get-collected-pins':
+            getCollectedPins();
+            break;
+        case 'reset-game':
+            resetGame();
+            break;
+    }
 } else {
     displayFullPage();
+}
+
+function resetGame() {
+    // Completely destroy the existing session
+    session_unset();     // Remove all session variables
+    session_destroy();   // Destroy the session
+
+    // Start a new session
+    session_start();
+
+    // Send a JSON response indicating successful reset
+    header('Content-Type: application/json');
+    echo json_encode([
+        'status' => 'success', 
+        'message' => 'Game has been reset successfully.'
+    ]);
+    exit;
 }
 
 function handleGuessSubmission() {
@@ -23,7 +47,7 @@ function handleGuessSubmission() {
     if ($isCorrect) {
         $currentPin = isset($_SESSION['current_riddle_pin']) ? $_SESSION['current_riddle_pin'] : null;
         
-        // starting  collected pins array if not exists
+        // Initialize collected pins array if not exists
         if (!isset($_SESSION['collected_pins'])) {
             $_SESSION['collected_pins'] = [];
         }
@@ -223,6 +247,8 @@ function displayFullPage() {
     </div>
     
     <button onclick="loadNewRiddle()">NEW RIDDLE</button>
+    <button onclick="resetGame()">RESET GAME</button>
+    
     <div id="result"></div>
     
     <div id="pin-container">
@@ -286,6 +312,29 @@ function displayFullPage() {
     function loadNewRiddle() {
         document.getElementById('riddle-text').textContent = 'ACCESSING RIDDLE DATABASE...';
         fetchRiddle();
+    }
+
+    function resetGame() {
+        fetch("?action=reset-game")
+            .then(response => response.json())
+            .then(data => {
+                // Reset UI elements
+                document.getElementById('collected-pins').textContent = 'NONE';
+                document.getElementById('result').textContent = 'SYSTEM RESET - REINITIALIZING...';
+                document.getElementById('riddle-text').textContent = 'INITIALIZING RIDDLE MODULE...';
+                document.getElementById('guess-input').value = '';
+                document.getElementById('answer-length').textContent = '';
+
+                // Reinitialize game state
+                collectedPins = [];
+                answerLength = 0;
+
+                // Start game again
+                startGame();
+            })
+            .catch(error => {
+                document.getElementById('result').textContent = 'RESET FAILED - SYSTEM ERROR';
+            });
     }
 
     function submitGuess() {
