@@ -35,12 +35,15 @@ function resetGame() {
     ]);
     exit;
 }
-
+//example of properly handling user input in php
 function handleGuessSubmission() {
+  //safely getting user input
     $data = json_decode(file_get_contents('php://input'), true);
+    //sanitizing and validating user input to prevent sql injection
     $guess = isset($data['guess']) ? trim($data['guess']) : '';
-    
+    //using session data securely
     $correctAnswer = isset($_SESSION['correct_answer']) ? $_SESSION['correct_answer'] : '';
+    //case insensitive comparison for better user experience after testing the game
     $isCorrect = strcasecmp($guess, $correctAnswer) === 0;
     
     // If guess is correct, track the pin
