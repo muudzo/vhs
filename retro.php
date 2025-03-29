@@ -70,12 +70,13 @@ function handleGuessSubmission() {
 }
 
 function fetchRandomRiddle() {
-    $servername = "localhost";
+    $servername = "localhost";//
     $username = "root";
     $password = "Mudzo2608";
-    $dbname = "80s_video_store";
+    $dbname = "80s_video_store";//database name
 
     try {
+      //establishing a connection to the database
         $pdo = new PDO("mysql:host=$servername;dbname=$dbname;charset=utf8", $username, $password);
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
@@ -86,11 +87,12 @@ function fetchRandomRiddle() {
         $query = "SELECT question, answer, pin FROM riddles 
                   WHERE pin != 0 $pinCondition 
                   ORDER BY RAND() LIMIT 1";
+                  //using prepared statements to prevent sql injection
         $stmt = $pdo->prepare($query);
         $stmt->execute();
 
         $riddle = $stmt->fetch(PDO::FETCH_ASSOC);
-
+//returning the riddle and its length
         if ($riddle) {
             $trimmedAnswer = trim($riddle['answer']);
             $_SESSION['correct_answer'] = $trimmedAnswer;
@@ -107,6 +109,7 @@ function fetchRandomRiddle() {
             http_response_code(404);
             echo json_encode(['error' => 'No more unique riddles available']);
         }
+        //error handling
     } catch (PDOException $e) {
         http_response_code(500);
         echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
