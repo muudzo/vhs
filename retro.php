@@ -18,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 } else {
     displayFullPage();
 }
-
+//example of resetting the game with an ajax interaction
 function resetGame() {
     // Completely destroy the existing session
     session_unset();     // Remove all session variables
