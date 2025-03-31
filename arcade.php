@@ -7,8 +7,7 @@
               <li style="margin: 5px 0;">🎮 <span style="color: #666;">GRAY</span> = Pin not in the code</li>
             </ul>
           </div>
-        </div>
-        <?php
+        </div><?php
 session_start();
 
 // Initialize pins array if it doesn't exist
@@ -67,39 +66,79 @@ function handleGuessSubmission() {
 }
 
 function fetchRandomRiddle() {
+    // Database connection details
     $servername = "localhost";
     $username = "root";
     $password = "Mudzo2608";
     $dbname = "80s_video_store";
-
+    
+    // Hardcoded riddles as fallback
+    $hardcodedRiddles = [
+        ['question' => 'What has keys but no locks, space but no room, and you can enter but not go in?', 'answer' => 'keyboard'],
+        ['question' => 'I speak without a mouth and hear without ears. I have no body, but I come alive with wind. What am I?', 'answer' => 'echo'],
+        ['question' => 'The more you take, the more you leave behind. What am I?', 'answer' => 'footsteps'],
+        ['question' => 'What gets wetter as it dries?', 'answer' => 'towel'],
+        ['question' => 'What has a head, a tail, but no body?', 'answer' => 'coin'],
+        ['question' => 'I\'m tall when I\'m young, and I\'m short when I\'m old. What am I?', 'answer' => 'candle'],
+        ['question' => 'What can you break, even if you never pick it up or touch it?', 'answer' => 'promise'],
+        ['question' => 'What has many keys but can\'t open a single lock?', 'answer' => 'piano'],
+        ['question' => 'What can you hold in your right hand, but never in your left hand?', 'answer' => 'left hand'],
+        ['question' => 'What goes up but never comes down?', 'answer' => 'age']
+    ];
+    
+    // First try to get a riddle from the database
     try {
-        $pdo = new PDO("mysql:host=$servername;dbname=$dbname;charset=utf8", $username, $password);
-        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
+        // Set a short timeout for the database connection
+        $options = [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_TIMEOUT => 3, // 3 seconds timeout
+        ];
+        
+        $pdo = new PDO("mysql:host=$servername;dbname=$dbname;charset=utf8", $username, $password, $options);
+        
         $query = "SELECT question, answer FROM riddles ORDER BY RAND() LIMIT 1";
         $stmt = $pdo->prepare($query);
         $stmt->execute();
-
+        
         $riddle = $stmt->fetch(PDO::FETCH_ASSOC);
-
+        
         if ($riddle) {
+            // Successfully got a riddle from the database
             $trimmedAnswer = trim($riddle['answer']);
             $_SESSION['correct_answer'] = $trimmedAnswer;
+            $_SESSION['riddle_source'] = 'database';
             
             header('Content-Type: application/json');
             echo json_encode([
                 'riddle' => $riddle['question'],
                 'answerLength' => strlen($trimmedAnswer),
-                'pins' => $_SESSION['collected_pins']
+                'pins' => $_SESSION['collected_pins'],
+                'source' => 'database'
             ]);
-        } else {
-            http_response_code(404);
-            echo json_encode(['error' => 'No riddles found']);
+            exit;
         }
     } catch (PDOException $e) {
-        http_response_code(500);
-        echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
+        // Database error - log it but continue to fallback
+        error_log("Database error: " . $e->getMessage());
+        // We'll fall through to use hardcoded riddles
     }
+    
+    // If we get here, either the database connection failed or no riddles were found
+    // Use a hardcoded riddle instead
+    $randomIndex = array_rand($hardcodedRiddles);
+    $riddle = $hardcodedRiddles[$randomIndex];
+    
+    $trimmedAnswer = trim($riddle['answer']);
+    $_SESSION['correct_answer'] = $trimmedAnswer;
+    $_SESSION['riddle_source'] = 'hardcoded';
+    
+    header('Content-Type: application/json');
+    echo json_encode([
+        'riddle' => $riddle['question'],
+        'answerLength' => strlen($trimmedAnswer),
+        'pins' => $_SESSION['collected_pins'],
+        'source' => 'fallback'
+    ]);
     exit;
 }
 
