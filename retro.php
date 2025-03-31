@@ -229,7 +229,7 @@ function displayRiddlePage() {
         <div class="pin-placeholder" id="pin-slot-1"></div>
         <div class="pin-placeholder" id="pin-slot-2"></div>
       </div>
-      <p>Solve riddles to collect all 3 access pins</p>
+      <p>Solve riddles to collect all 3 access pins then place them in the correct order to unlock the next game </p>
     </div>
     
     <div class="game-controls">
