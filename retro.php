@@ -7,24 +7,26 @@ if (!isset($_SESSION['collected_pins'])) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_GET['action']) && $_GET['action'] === 'reset-pins') {
-        // Reset pins when requested
-        $_SESSION['collected_pins'] = [];
-        header('Content-Type: application/json');
-        echo json_encode(['success' => true, 'message' => 'Pins reset']);
-        exit;
-    } else {
-        handleGuessSubmission();
+    // Handle the riddle guess submission
+    handleGuessSubmission();
+} else if (isset($_GET['action'])) {
+    switch ($_GET['action']) {
+        case 'new-riddle':
+            fetchRandomRiddle();
+            break;
+        case 'reset-pins':
+            // Reset pins when requested
+            $_SESSION['collected_pins'] = [];
+            // Redirect back to the main page instead of JSON response
+            header('Location: ?');
+            exit;
+            break;
+        case 'mastermind':
+            displayMastermindGame();
+            break;
+        default:
+            displayRiddlePage();
     }
-} else if (isset($_GET['action']) && $_GET['action'] === 'new-riddle') {
-    fetchRandomRiddle();
-} else if (isset($_GET['action']) && $_GET['action'] === 'get-pins') {
-    // Return the collected pins
-    header('Content-Type: application/json');
-    echo json_encode(['pins' => $_SESSION['collected_pins']]);
-    exit;
-} else if (isset($_GET['action']) && $_GET['action'] === 'mastermind') {
-    displayMastermindGame();
 } else {
     displayRiddlePage();
 }
@@ -190,6 +192,12 @@ function displayRiddlePage() {
       background-color: #0f0;
       color: #000;
     }
+    .game-controls {
+      margin-top: 20px;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+    }
   </style>
 </head>
 <body>
@@ -212,7 +220,6 @@ function displayRiddlePage() {
         <button onclick="submitGuess()">EXECUTE GUESS</button>
     </div>
     
-    <button onclick="loadNewRiddle()">NEW RIDDLE</button>
     <div id="result"></div>
     
     <div id="collected-pins">
@@ -225,8 +232,11 @@ function displayRiddlePage() {
       <p>Solve riddles to collect all 3 access pins</p>
     </div>
     
-    <button id="next-phase-button" onclick="proceedToMastermind()">PROCEED TO FINAL PHASE</button>
-    <button onclick="resetPins()" style="margin-top: 10px;">RESET PINS</button>
+    <div class="game-controls">
+      <button id="next-phase-button" onclick="proceedToMastermind()">PROCEED TO FINAL PHASE</button>
+      <button onclick="loadNewRiddle()">NEW RIDDLE</button>
+      <button onclick="resetPins()">RESET PINS</button>
+    </div>
   </div>
 
   <script>
@@ -262,6 +272,7 @@ function displayRiddlePage() {
                 document.getElementById('answer-length').textContent = `[REQUIRED LENGTH: ${answerLength}]`;
                 document.getElementById('result').textContent = '';
                 guessInput.value = '';
+                guessInput.focus();
                 
                 // Update pins from server response
                 collectedPins = data.pins;
@@ -269,6 +280,7 @@ function displayRiddlePage() {
             })
             .catch(error => {
                 document.getElementById('riddle-text').textContent = 'SYSTEM MALFUNCTION - RETRY';
+                console.error(error);
             });
     }
 
@@ -296,6 +308,8 @@ function displayRiddlePage() {
             if (data.correct) {
                 if (data.pinAdded) {
                     document.getElementById('result').textContent += " | NEW ACCESS PIN ACQUIRED!";
+                    // Automatically load a new riddle after correct answer if not all pins collected
+                    setTimeout(loadNewRiddle, 1500);
                 } else {
                     document.getElementById('result').textContent += " | ALL ACCESS PINS COLLECTED!";
                 }
@@ -332,16 +346,24 @@ function displayRiddlePage() {
     }
     
     function resetPins() {
-        fetch("?action=reset-pins", {
-            method: "POST"
-        })
-        .then(response => response.json())
-        .then(data => {
-            collectedPins = [];
-            updatePinDisplay();
-            document.getElementById('result').textContent = "ACCESS PINS RESET";
-        });
+        if (confirm("Are you sure you want to reset your collected pins?")) {
+            window.location.href = "?action=reset-pins";
+        }
     }
+    
+    // Event listener for Enter key in input field
+    document.getElementById('guess-input').addEventListener('keydown', function(event) {
+        if (event.key === 'Enter') {
+            submitGuess();
+        }
+    });
+    
+    // Event listener for Enter key in password field
+    document.getElementById('password-input').addEventListener('keydown', function(event) {
+        if (event.key === 'Enter') {
+            checkPasscode();
+        }
+    });
   </script>
 
 </body>
@@ -365,7 +387,7 @@ function displayMastermindGame() {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>final-phase</title>
+    <title>Final Phase - Code Cracker</title>
     <link rel="stylesheet" href="mastermind.css">   
 </head>
 <body>
@@ -382,18 +404,30 @@ function displayMastermindGame() {
    
    <div id="guess-container">
      <div id="guess-inputs"></div>
-     <button onclick="submitGuess()">SUBMIT GUESS</button>
+     <button id="submit-button" onclick="submitGuess()">SUBMIT GUESS</button>
    </div>
    
    <div id="result"></div>
+   
+   <div id="attempts-history" style="margin-top: 20px; border-top: 2px dashed #0f0; padding-top: 15px; display: none;">
+     <h3>PREVIOUS ATTEMPTS</h3>
+     <div id="history-container"></div>
+   </div>
+   
+   <div style="margin-top: 20px;">
+     <button onclick="window.location.href='?'" style="background: #111; color: #0f0; border: 1px solid #0f0; padding: 5px 10px;">RETURN TO RIDDLES</button>
+   </div>
    
    <script>
     const secretCode = "<?php echo $secretCode; ?>";
     const availableDigits = [<?php echo implode(',', $pins); ?>];
     let attempts = 0;
     let maxAttempts = 5;
+    let attemptHistory = [];
     const guessInputContainer = document.getElementById('guess-inputs');
     const resultDiv = document.getElementById('result');
+    const historyContainer = document.getElementById('history-container');
+    const attemptsHistory = document.getElementById('attempts-history');
 
     function generateInputBoxes(length) {
         guessInputContainer.innerHTML = '';
@@ -426,9 +460,16 @@ function displayMastermindGame() {
             input.addEventListener('keydown', (event) => {
                 if (event.key === 'Backspace' && input.value === '' && index > 0) {
                     inputs[index - 1].focus();
+                } else if (event.key === 'Enter') {
+                    submitGuess();
                 }
             });
         });
+        
+        // Focus on first input when game starts
+        if (inputs.length > 0) {
+            inputs[0].focus();
+        }
     }
 
     function submitGuess() {
@@ -445,12 +486,25 @@ function displayMastermindGame() {
         const isCorrect = updateInputFeedback(feedback, guess);
         attempts++;
         
+        // Add to history
+        attemptHistory.push({ guess, feedback });
+        updateHistory();
+        
         if (isCorrect) {
-            resultDiv.innerHTML = 'ACCESS GRANTED! CODE UNLOCKED!<br><button onclick="window.location.href=\'game-success.php\'" style="margin-top:15px;">CONTINUE</button>';
+            resultDiv.innerHTML = '<span style="color: #0f0; font-size: 1.2em; font-weight: bold;">ACCESS GRANTED! CODE UNLOCKED!</span>';
+            document.getElementById('submit-button').disabled = true;
+            
+            // You mentioned you'll create the success page separately
+            setTimeout(() => {
+                window.location.href = 'success.php'; // Point this to your success page
+            }, 2000);
         } else if (attempts >= maxAttempts) {
-            resultDiv.innerHTML = `GAME OVER! THE CODE WAS: ${secretCode}<br><button onclick="window.location.href=\'?\'" style="margin-top:15px;">RESTART</button>`;
+            resultDiv.innerHTML = `<span style="color: #f00;">GAME OVER! THE CODE WAS: ${secretCode}</span><br>
+            <button onclick="window.location.href='?'" style="margin-top:15px; background: #300; color: #f88; border: 1px solid #f00;">RESTART</button>`;
+            disableAllInputs();
         } else {
             resultDiv.textContent = `ATTEMPT ${attempts} of ${maxAttempts}`;
+            clearInputs();
         }
     }
 
@@ -464,10 +518,79 @@ function displayMastermindGame() {
             const input = document.getElementById(`digit${index}`);
             input.classList.remove('green', 'yellow', 'gray');
             input.classList.add(status);
-            input.value = guess[index];
-            input.disabled = allCorrect;
         });
         return allCorrect;
+    }
+    
+    function clearInputs() {
+        for (let i = 0; i < secretCode.length; i++) {
+            const input = document.getElementById(`digit${i}`);
+            input.value = '';
+            input.classList.remove('green', 'yellow', 'gray');
+        }
+        document.getElementById(`digit0`).focus();
+    }
+    
+    function disableAllInputs() {
+        const inputs = document.querySelectorAll('.digit-input');
+        inputs.forEach(input => {
+            input.disabled = true;
+        });
+        document.getElementById('submit-button').disabled = true;
+    }
+    
+    function updateHistory() {
+        if (attemptHistory.length > 0) {
+            attemptsHistory.style.display = 'block';
+            
+            historyContainer.innerHTML = '';
+            attemptHistory.forEach((attempt, attemptIndex) => {
+                const historyRow = document.createElement('div');
+                historyRow.style.margin = '5px 0';
+                historyRow.style.display = 'flex';
+                historyRow.style.alignItems = 'center';
+                historyRow.style.justifyContent = 'center';
+                
+                // Add attempt number
+                const attemptNumber = document.createElement('div');
+                attemptNumber.textContent = `#${attemptIndex + 1}:`;
+                attemptNumber.style.marginRight = '10px';
+                historyRow.appendChild(attemptNumber);
+                
+                // Add digits with feedback colors
+                attempt.guess.split('').forEach((digit, i) => {
+                    const digitSpan = document.createElement('span');
+                    digitSpan.textContent = digit;
+                    digitSpan.style.display = 'inline-block';
+                    digitSpan.style.width = '30px';
+                    digitSpan.style.height = '30px';
+                    digitSpan.style.lineHeight = '30px';
+                    digitSpan.style.textAlign = 'center';
+                    digitSpan.style.margin = '0 5px';
+                    digitSpan.style.borderRadius = '4px';
+                    
+                    // Apply color based on feedback
+                    switch (attempt.feedback[i]) {
+                        case 'green':
+                            digitSpan.style.backgroundColor = '#0f0';
+                            digitSpan.style.color = '#000';
+                            break;
+                        case 'yellow':
+                            digitSpan.style.backgroundColor = '#ff0';
+                            digitSpan.style.color = '#000';
+                            break;
+                        case 'gray':
+                            digitSpan.style.backgroundColor = '#333';
+                            digitSpan.style.color = '#0f0';
+                            break;
+                    }
+                    
+                    historyRow.appendChild(digitSpan);
+                });
+                
+                historyContainer.appendChild(historyRow);
+            });
+        }
     }
 
     generateInputBoxes(secretCode.length);
