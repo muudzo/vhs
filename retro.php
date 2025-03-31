@@ -10,12 +10,28 @@ if (!isset($_SESSION['current_category'])) {
     $_SESSION['current_category'] = 1; // Default to Movies (ID: 1)
 }
 
+// Check if we need to skip the password screen (category change)
+$skipPasswordScreen = false;
+if (isset($_GET['keep_session']) && $_GET['keep_session'] == '1') {
+    $skipPasswordScreen = true;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['category'])) {
+        // Save the current game state
+        $maintainSession = isset($_POST['maintain_session']) && $_POST['maintain_session'] === 'true';
+        
         // Handle category selection via POST
         $_SESSION['current_category'] = (int)$_POST['category'];
-        header('Location: ?');
-        exit;
+        
+        // Only redirect if this is a maintenance of existing session
+        if ($maintainSession) {
+            header('Location: ?keep_session=1');
+            exit;
+        } else {
+            header('Location: ?');
+            exit;
+        }
     } else {
         // Handle the riddle guess submission
         handleGuessSubmission();
@@ -99,14 +115,6 @@ function fetchCategories() {
 function fetchRandomRiddle() {
     $categoryId = (int)$_SESSION['current_category'];
     
-    // Default riddle in case of error
-    $fallbackRiddles = [
-        1 => ['question' => 'A boy who meets an alien and helps him phone home. What movie am I?', 'answer' => 'et'],
-        2 => ['question' => 'I\'m played on ice with sticks and a puck. What sport am I?', 'answer' => 'hockey'],
-        3 => ['question' => 'I\'m a strategy game with kings, queens, and pawns. What am I?', 'answer' => 'chess'],
-        4 => ['question' => 'I store data as key-value pairs in JavaScript. What am I?', 'answer' => 'object']
-    ];
-    
     try {
         $dbConfig = getDbConfig();
         $pdo = new PDO("mysql:host={$dbConfig['host']};dbname={$dbConfig['dbname']};charset=utf8", 
@@ -115,23 +123,34 @@ function fetchRandomRiddle() {
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         
         // Try to get riddle from selected category
-        $query = "SELECT id, question, answer FROM riddles WHERE category_id = :category_id ORDER BY RAND() LIMIT 1";
+        $query = "SELECT question, answer FROM riddles WHERE category_id = :category_id ORDER BY RAND() LIMIT 1";
         $stmt = $pdo->prepare($query);
         $stmt->bindParam(':category_id', $categoryId);
         $stmt->execute();
         
         $riddle = $stmt->fetch(PDO::FETCH_ASSOC);
         
-        // If no riddle found in selected category, fall back to default
-        if (!$riddle && isset($fallbackRiddles[$categoryId])) {
-            $riddle = $fallbackRiddles[$categoryId];
-        } else if (!$riddle) {
-            // If category doesn't exist in fallback, use the first fallback
-            $riddle = $fallbackRiddles[1];
+        if (!$riddle) {
+            // If no riddle found in selected category, try general fallback
+            $query = "SELECT question, answer FROM riddles ORDER BY RAND() LIMIT 1";
+            $stmt = $pdo->prepare($query);
+            $stmt->execute();
+            $riddle = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            // If still no riddle found, use hardcoded fallback
+            if (!$riddle) {
+                $riddle = [
+                    'question' => 'What has keys but no locks, space but no room, and you can enter but not go in?',
+                    'answer' => 'keyboard'
+                ];
+            }
         }
     } catch (PDOException $e) {
-        // Database error - use fallback riddle
-        $riddle = isset($fallbackRiddles[$categoryId]) ? $fallbackRiddles[$categoryId] : $fallbackRiddles[1];
+        // Database error - use hardcoded fallback
+        $riddle = [
+            'question' => 'What has keys but no locks, space but no room, and you can enter but not go in?',
+            'answer' => 'keyboard'
+        ];
     }
     
     $trimmedAnswer = trim($riddle['answer']);
@@ -158,6 +177,8 @@ function getDbConfig() {
 }
 
 function displayRiddlePage() {
+    global $skipPasswordScreen; // Access the global variable
+    
     // Hardcoded category names based on the database structure
     $categories = [
         1 => ['id' => 1, 'name' => 'Movies', 'description' => '80s and 90s movie riddles'],
@@ -393,14 +414,14 @@ function displayRiddlePage() {
   <div class="crt-scan"></div>
   <div class="pin-notification" id="pin-notification"></div>
 
-  <div id="password-screen">
+  <div id="password-screen" style="<?php echo $skipPasswordScreen ? 'display:none;' : ''; ?>">
     <h2>ENTER ACCESS CODE</h2>
     <input type="password" id="password-input" placeholder="ACCESS CODE">
     <button onclick="checkPasscode()">ENTER</button>
     <div id="password-error"></div>
   </div>
 
-  <div id="game-container">
+  <div id="game-container" style="<?php echo $skipPasswordScreen ? 'display:block;' : 'display:none;'; ?>">
     <div class="category-selector">
       <?php foreach ($categories as $category): ?>
         <button 
@@ -460,6 +481,13 @@ function displayRiddlePage() {
       4: { id: 4, name: 'Coding Knowledge', description: 'Riddles about programming, databases, and APIs' }
     };
 
+    // Initialize the game if we're skipping the password screen
+    document.addEventListener('DOMContentLoaded', function() {
+      if (<?php echo $skipPasswordScreen ? 'true' : 'false'; ?>) {
+        startGame();
+      }
+    });
+
     function checkPasscode() {
       const userInput = document.getElementById('password-input').value;
       if (userInput === unlockPasscode) {
@@ -477,7 +505,12 @@ function displayRiddlePage() {
     }
     
     function changeCategory(categoryId) {
-      // Create and submit a form to change category
+      // First check if we're already on this category
+      if (currentCategory === categoryId) {
+        return; // Don't do anything if we're already on this category
+      }
+      
+      // Create and submit a form to change category without affecting the session
       const form = document.createElement('form');
       form.method = 'POST';
       form.style.display = 'none';
@@ -487,7 +520,14 @@ function displayRiddlePage() {
       input.name = 'category';
       input.value = categoryId;
       
+      // Add a flag to indicate this is just a category change, not a full session reset
+      const flagInput = document.createElement('input');
+      flagInput.type = 'hidden';
+      flagInput.name = 'maintain_session';
+      flagInput.value = 'true';
+      
       form.appendChild(input);
+      form.appendChild(flagInput);
       document.body.appendChild(form);
       form.submit();
     }
@@ -549,7 +589,7 @@ function displayRiddlePage() {
           
           // Update active category in UI
           document.querySelectorAll('.category-option').forEach(btn => {
-            if (parseInt(btn.onclick.toString().match(/\d+/)[0]) === currentCategory) {
+            if (parseInt(btn.getAttribute('onclick').match(/\d+/)[0]) === currentCategory) {
               btn.classList.add('active');
             } else {
               btn.classList.remove('active');
@@ -879,7 +919,7 @@ function displayMastermindGame() {
             inputs[0].focus();
         }
     }
-    
+
     function submitGuess() {
         let guess = "";
         for (let i = 0; i < secretCode.length; i++) {
@@ -927,7 +967,7 @@ function displayMastermindGame() {
             clearInputs();
         }
     }
-    
+
     function checkGuess(guess, code) {
         return Array.from(guess).map((digit, index) => digit === code[index] ? 'green' : code.includes(digit) ? 'yellow' : 'gray');
     }
