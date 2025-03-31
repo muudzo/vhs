@@ -1,4 +1,4 @@
-const secretCode = "2600";
+const secretCode = "260";
 let attempts = 0;
 let maxAttempts = 5;
 const guessInputContainer = document.getElementById('guess-inputs');
