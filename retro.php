@@ -22,6 +22,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         case 'mastermind':
             displayMastermindGame();
             break;
+        case 'reset-game':
+            // Destroy the session to completely reset the game
+            session_destroy();
+            // Start a new session
+            session_start();
+            $_SESSION['collected_pins'] = [];
+            // Redirect back to the main page
+            header('Location: ?');
+            exit;
+            break;
         default:
             displayRiddlePage();
     }
@@ -666,7 +676,7 @@ function displayMastermindGame() {
    </div>
    
    <div style="margin-top: 20px;">
-     <button onclick="window.location.href='?'" style="background: #111; color: #0f0; border: 1px solid #0f0; padding: 5px 10px;">RETURN TO RIDDLES</button>
+     <button onclick="window.location.href='?action=reset-game'" style="background: #111; color: #0f0; border: 1px solid #0f0; padding: 5px 10px;">RESET GAME</button>
    </div>
    
    <script>
@@ -750,13 +760,24 @@ function displayMastermindGame() {
             resultDiv.innerHTML = '<span style="color: #0f0; font-size: 1.2em; font-weight: bold;">ACCESS GRANTED! CODE UNLOCKED!</span>';
             document.getElementById('submit-button').disabled = true;
             
-            // Redirect to success page after a short delay
-            setTimeout(() => {
-                window.location.href = 'success.php';
-            }, 1500);
+            // Add play again button that resets session
+            const playAgainButton = document.createElement('button');
+            playAgainButton.textContent = 'PLAY AGAIN';
+            playAgainButton.style.margin = '15px';
+            playAgainButton.style.background = '#002200';
+            playAgainButton.style.color = '#0f0';
+            playAgainButton.style.border = '2px solid #0f0';
+            playAgainButton.style.padding = '10px 20px';
+            playAgainButton.onclick = function() {
+                window.location.href = '?action=reset-game';
+            };
+            resultDiv.appendChild(document.createElement('br'));
+            resultDiv.appendChild(playAgainButton);
+            
+            // No redirect - let the player choose to play again
         } else if (attempts >= maxAttempts) {
             resultDiv.innerHTML = `<span style="color: #f00;">GAME OVER! THE CODE WAS: ${secretCode}</span><br>
-            <button onclick="window.location.href='?'" style="margin-top:15px; background: #300; color: #f88; border: 1px solid #f00;">RESTART</button>`;
+            <button onclick="window.location.href='?action=reset-game'" style="margin-top:15px; background: #300; color: #f88; border: 1px solid #f00;">PLAY AGAIN</button>`;
             disableAllInputs();
         } else {
             resultDiv.textContent = `ATTEMPT ${attempts} of ${maxAttempts}`;
@@ -851,6 +872,108 @@ function displayMastermindGame() {
 
     generateInputBoxes(secretCode.length);
    </script>
+</body>
+</html>
+<?php
+}
+
+// Add a function for success.php that includes a reset button
+function createSuccessPage() {
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Access Granted</title>
+    <style>
+        body {
+            background-color: #000;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            text-align: center;
+            padding: 50px;
+            overflow: hidden;
+        }
+        
+        h1 {
+            font-size: 3em;
+            margin-bottom: 30px;
+            text-shadow: 0 0 10px #0f0;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 30px;
+            border: 2px solid #0f0;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+        }
+        
+        .success-message {
+            font-size: 1.5em;
+            margin: 30px 0;
+        }
+        
+        .play-again {
+            display: inline-block;
+            margin-top: 40px;
+            padding: 15px 30px;
+            background-color: #001100;
+            color: #0f0;
+            text-decoration: none;
+            border: 2px solid #0f0;
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .play-again:hover {
+            background-color: #0f0;
+            color: #000;
+        }
+        
+        /* CRT effect */
+        .crt-lines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background: linear-gradient(transparent 50%, rgba(0, 0, 0, 0.05) 50%);
+            background-size: 100% 4px;
+            pointer-events: none;
+        }
+        
+        @keyframes flicker {
+            0% { opacity: 0.97; }
+            5% { opacity: 0.9; }
+            10% { opacity: 0.97; }
+            15% { opacity: 1; }
+            50% { opacity: 0.98; }
+            95% { opacity: 0.9; }
+            100% { opacity: 0.98; }
+        }
+        
+        body {
+            animation: flicker 5s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="crt-lines"></div>
+    
+    <div class="container">
+        <h1>ACCESS GRANTED</h1>
+        
+        <div class="success-message">
+            <p>You've successfully completed all challenges!</p>
+            <p>The retro terminal system has been unlocked.</p>
+        </div>
+        
+        <a href="?action=reset-game" class="play-again">PLAY AGAIN</a>
+    </div>
 </body>
 </html>
 <?php
