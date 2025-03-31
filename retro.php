@@ -4,14 +4,29 @@ session_start();
 if (!isset($_SESSION['collected_pins'])) {
     $_SESSION['collected_pins'] = [];
 }
+
+// Initialize current category if it doesn't exist
+if (!isset($_SESSION['current_category'])) {
+    $_SESSION['current_category'] = 1; // Default to Movies (ID: 1)
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Handle the riddle guess submission
-    handleGuessSubmission();
+    if (isset($_POST['category'])) {
+        // Handle category selection via POST
+        $_SESSION['current_category'] = (int)$_POST['category'];
+        header('Location: ?');
+        exit;
+    } else {
+        // Handle the riddle guess submission
+        handleGuessSubmission();
+    }
 } else if (isset($_GET['action'])) {
     switch ($_GET['action']) {
         case 'new-riddle':
-            $category_id = isset($_GET['category']) ? intval($_GET['category']) : null;
-            fetchRandomRiddle($category_id);
+            fetchRandomRiddle();
+            break;
+        case 'get-categories':
+            fetchCategories();
             break;
         case 'reset-pins':
             // Reset pins when requested
@@ -22,9 +37,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             break;
         case 'mastermind':
             displayMastermindGame();
-            break;
-        case 'success':
-            displaySuccessPage();
             break;
         case 'reset-game':
             // Destroy the session to completely reset the game
@@ -67,131 +79,95 @@ function handleGuessSubmission() {
     exit;
 }
 
-function getCategories() {
+function fetchCategories() {
+    // Hardcoded categories based on the image provided
     $categories = [
-        ['id' => 1, 'name' => 'General Riddles'],
-        ['id' => 2, 'name' => 'Movies - Easy'],
-        ['id' => 3, 'name' => 'Movies - Medium'],
-        ['id' => 4, 'name' => 'Movies - Hard'],
+        1 => 'Movies',
+        2 => 'Sports Trivia',
+        3 => 'Games',
+        4 => 'Coding Knowledge'
     ];
     
-    try {
-        $servername = "localhost";
-        $username = "root";
-        $password = "Mudzo2608";
-        $dbname = "80s_video_store";
-        
-        $pdo = new PDO("mysql:host=$servername;dbname=$dbname;charset=utf8", $username, $password);
-        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        
-        $stmt = $pdo->prepare("SELECT category_id as id, category_name as name FROM categories ORDER BY category_id");
-        $stmt->execute();
-        
-        $dbCategories = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        if (!empty($dbCategories)) {
-            $categories = $dbCategories;
-        }
-    } catch (PDOException $e) {
-        // Use hardcoded categories if DB fails
-    }
-    
-    return $categories;
+    header('Content-Type: application/json');
+    echo json_encode([
+        'categories' => $categories,
+        'currentCategory' => $_SESSION['current_category']
+    ]);
+    exit;
 }
 
-function fetchRandomRiddle($category_id = null) {
-    // Use hardcoded riddles to ensure functionality without database
-    $hardcodedRiddles = [
-        // General riddles (category 1)
-        ['question' => 'What has keys but no locks, space but no room, and you can enter but not go in?', 'answer' => 'keyboard', 'category_id' => 1],
-        ['question' => 'I speak without a mouth and hear without ears. I have no body, but I come alive with wind. What am I?', 'answer' => 'echo', 'category_id' => 1],
-        ['question' => 'The more you take, the more you leave behind. What am I?', 'answer' => 'footsteps', 'category_id' => 1],
-        ['question' => 'What gets wetter as it dries?', 'answer' => 'towel', 'category_id' => 1],
-        ['question' => 'What has a head, a tail, but no body?', 'answer' => 'coin', 'category_id' => 1],
-        ['question' => 'I\'m tall when I\'m young, and I\'m short when I\'m old. What am I?', 'answer' => 'candle', 'category_id' => 1],
-        // Movie riddles - easy (category 2)
-        ['question' => 'I\'m a movie about a boy who befriends an alien. What am I?', 'answer' => 'ET', 'category_id' => 2],
-        ['question' => 'I\'m a box that holds movies, with a rewind button to go back. What am I?', 'answer' => 'VHS', 'category_id' => 2],
-        // Movie riddles - medium (category 3)
-        ['question' => 'I\'m a movie where kids fight a scary clown. What am I?', 'answer' => 'IT', 'category_id' => 3],
-        ['question' => 'I\'m a machine that plays movies on your TV. What am I?', 'answer' => 'VCR', 'category_id' => 3],
-        // Movie riddles - hard (category 4)
-        ['question' => 'I\'m a little green guy, wise and old, in a galaxy where stories are told. Who am I?', 'answer' => 'Yoda', 'category_id' => 4],
-        ['question' => 'I\'m a movie star from the 80s with a hoverboard. Who am I?', 'answer' => 'MARTY', 'category_id' => 4],
+function fetchRandomRiddle() {
+    $categoryId = (int)$_SESSION['current_category'];
+    
+    // Default riddle in case of error
+    $fallbackRiddles = [
+        1 => ['question' => 'A boy who meets an alien and helps him phone home. What movie am I?', 'answer' => 'et'],
+        2 => ['question' => 'I\'m played on ice with sticks and a puck. What sport am I?', 'answer' => 'hockey'],
+        3 => ['question' => 'I\'m a strategy game with kings, queens, and pawns. What am I?', 'answer' => 'chess'],
+        4 => ['question' => 'I store data as key-value pairs in JavaScript. What am I?', 'answer' => 'object']
     ];
     
-    // Try database if available
-    $useHardcoded = true;
     try {
-        $servername = "localhost";
-        $username = "root";
-        $password = "Mudzo2608";
-        $dbname = "80s_video_store";
-        
-        $pdo = new PDO("mysql:host=$servername;dbname=$dbname;charset=utf8", $username, $password);
+        $dbConfig = getDbConfig();
+        $pdo = new PDO("mysql:host={$dbConfig['host']};dbname={$dbConfig['dbname']};charset=utf8", 
+                       $dbConfig['username'], 
+                       $dbConfig['password']);
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         
-        // Modified query to include category filter if provided
-        $sql = "SELECT r.question, r.answer, r.category_id FROM riddles r";
-        $params = [];
-        
-        if ($category_id) {
-            $sql .= " WHERE r.category_id = ?";
-            $params[] = $category_id;
-        }
-        
-        $sql .= " ORDER BY RAND() LIMIT 1";
-        
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
+        // Try to get riddle from selected category
+        $query = "SELECT id, question, answer FROM riddles WHERE category_id = :category_id ORDER BY RAND() LIMIT 1";
+        $stmt = $pdo->prepare($query);
+        $stmt->bindParam(':category_id', $categoryId);
+        $stmt->execute();
         
         $riddle = $stmt->fetch(PDO::FETCH_ASSOC);
-        if ($riddle) {
-            $useHardcoded = false;
+        
+        // If no riddle found in selected category, fall back to default
+        if (!$riddle && isset($fallbackRiddles[$categoryId])) {
+            $riddle = $fallbackRiddles[$categoryId];
+        } else if (!$riddle) {
+            // If category doesn't exist in fallback, use the first fallback
+            $riddle = $fallbackRiddles[1];
         }
     } catch (PDOException $e) {
-        // Database error - we'll use hardcoded riddles
-        $useHardcoded = true;
-    }
-    
-    // If database failed or no riddles found, use hardcoded with category filter if provided
-    if ($useHardcoded) {
-        $filteredRiddles = $hardcodedRiddles;
-        
-        // Filter by category if specified
-        if ($category_id) {
-            $filteredRiddles = array_filter($hardcodedRiddles, function($r) use ($category_id) {
-                return $r['category_id'] == $category_id;
-            });
-            
-            // If no riddles in this category, use all riddles
-            if (empty($filteredRiddles)) {
-                $filteredRiddles = $hardcodedRiddles;
-            }
-        }
-        
-        $randomIndex = array_rand($filteredRiddles);
-        $riddle = $filteredRiddles[$randomIndex];
+        // Database error - use fallback riddle
+        $riddle = isset($fallbackRiddles[$categoryId]) ? $fallbackRiddles[$categoryId] : $fallbackRiddles[1];
     }
     
     $trimmedAnswer = trim($riddle['answer']);
     $_SESSION['correct_answer'] = $trimmedAnswer;
-    
-    // Store category for next riddle
-    if (isset($riddle['category_id'])) {
-        $_SESSION['current_category'] = $riddle['category_id'];
-    }
     
     header('Content-Type: application/json');
     echo json_encode([
         'riddle' => $riddle['question'],
         'answerLength' => strlen($trimmedAnswer),
         'pins' => $_SESSION['collected_pins'],
-        'category' => $_SESSION['current_category'] ?? null
+        'category' => $categoryId
     ]);
     exit;
 }
 
+// Database configuration function to centralize credentials
+function getDbConfig() {
+    return [
+        'host' => 'localhost',
+        'dbname' => '80s_video_store',
+        'username' => 'root',
+        'password' => 'Mudzo2608'
+    ];
+}
+
 function displayRiddlePage() {
+    // Hardcoded category names based on the database structure
+    $categories = [
+        1 => ['id' => 1, 'name' => 'Movies', 'description' => '80s and 90s movie riddles'],
+        2 => ['id' => 2, 'name' => 'Sports Trivia', 'description' => 'Riddles about various sports'],
+        3 => ['id' => 3, 'name' => 'Games', 'description' => 'Video game and board game riddles'],
+        4 => ['id' => 4, 'name' => 'Coding Knowledge', 'description' => 'Riddles about programming, databases, and APIs']
+    ];
+    
+    $currentCategoryId = isset($_SESSION['current_category']) ? $_SESSION['current_category'] : 1;
+    $currentCategory = isset($categories[$currentCategoryId]) ? $categories[$currentCategoryId] : $categories[1];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -372,53 +348,44 @@ function displayRiddlePage() {
     }
     
     /* Category selector styling */
-    #category-selector {
-      background-color: #000;
+    .category-selector {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    
+    .category-option {
+      background: #000;
       color: #0f0;
       border: 2px solid #0f0;
       padding: 8px 12px;
       font-family: 'Courier New', monospace;
       font-size: 16px;
       cursor: pointer;
-      outline: none;
-      appearance: none;
-      -webkit-appearance: none;
-      -moz-appearance: none;
-      position: relative;
-      min-width: 200px;
+      transition: all 0.2s;
     }
     
-    #category-selector:focus {
-      box-shadow: 0 0 8px rgba(0, 255, 0, 0.5);
+    .category-option:hover {
+      background: #001800;
     }
     
-    /* Custom dropdown arrow */
-    #category-selector {
-      background-image: linear-gradient(45deg, transparent 50%, #0f0 50%), 
-                       linear-gradient(135deg, #0f0 50%, transparent 50%);
-      background-position: calc(100% - 20px) calc(1em), calc(100% - 15px) calc(1em);
-      background-size: 5px 5px, 5px 5px;
-      background-repeat: no-repeat;
-      padding-right: 30px;
-    }
-    
-    /* Glowing effect on hover */
-    #category-selector:hover,
-    #category-container button:hover {
-      box-shadow: 0 0 10px rgba(0, 255, 0, 0.7);
-    }
-    
-    /* Arcade button style for the load button */
-    #category-container button {
-      transition: all 0.2s ease;
-      text-transform: uppercase;
+    .category-option.active {
+      background: #0f0;
+      color: #000;
       font-weight: bold;
-      letter-spacing: 1px;
     }
     
-    #category-container button:active {
-      transform: scale(0.95);
-      box-shadow: 0 0 15px rgba(0, 255, 0, 1);
+    .category-info {
+      text-align: center;
+      margin-bottom: 20px;
+      color: #0f0;
+    }
+    
+    .category-description {
+      font-style: italic;
+      font-size: 14px;
+      opacity: 0.8;
     }
   </style>
 </head>
@@ -434,29 +401,30 @@ function displayRiddlePage() {
   </div>
 
   <div id="game-container">
-    <div id="riddle-container">
-        <h2 id="riddle-text">INITIALIZING RIDDLE MODULE...</h2>
-        <div class="answer-length" id="answer-length"></div>
+    <div class="category-selector">
+      <?php foreach ($categories as $category): ?>
+        <button 
+          class="category-option <?php echo ($category['id'] == $currentCategoryId) ? 'active' : ''; ?>" 
+          onclick="changeCategory(<?php echo $category['id']; ?>)">
+          <?php echo $category['id'] . '. ' . $category['name']; ?>
+        </button>
+      <?php endforeach; ?>
     </div>
     
-    <!-- Category selection interface -->
-    <div id="category-container" style="margin: 20px 0; text-align: center;">
-      <div style="display: inline-block; padding: 10px; border: 2px dashed #0f0; background-color: #001100;">
-        <h3 style="margin-top: 0; margin-bottom: 10px;">SELECT RIDDLE CATEGORY</h3>
-        <div style="display: flex; align-items: center; justify-content: center;">
-          <select id="category-selector" style="background: #000; color: #0f0; border: 2px solid #0f0; padding: 8px; margin-right: 10px; font-family: 'Courier New', monospace;">
-            <?php foreach(getCategories() as $category): ?>
-              <option value="<?php echo $category['id']; ?>"><?php echo $category['name']; ?></option>
-            <?php endforeach; ?>
-          </select>
-          <button onclick="loadRiddleWithCategory()" style="background: #000; color: #0f0; border: 2px solid #0f0; padding: 8px 15px; cursor: pointer;">LOAD CATEGORY</button>
-        </div>
+    <div class="category-info">
+      <div class="category-description">
+        <?php echo $currentCategory['description']; ?>
       </div>
     </div>
     
+    <div id="riddle-container">
+      <h2 id="riddle-text">INITIALIZING RIDDLE MODULE...</h2>
+      <div class="answer-length" id="answer-length"></div>
+    </div>
+    
     <div id="guess-container">
-        <div id="answer-inputs"></div>
-        <button onclick="submitGuess()">EXECUTE GUESS</button>
+      <div id="answer-inputs"></div>
+      <button onclick="submitGuess()">EXECUTE GUESS</button>
     </div>
     
     <div id="result"></div>
@@ -482,6 +450,15 @@ function displayRiddlePage() {
     const unlockPasscode = "1234";
     let answerLength = 0;
     let collectedPins = [];
+    let currentCategory = <?php echo $currentCategoryId; ?>;
+    
+    // Hardcoded category details (matching PHP)
+    const categories = {
+      1: { id: 1, name: 'Movies', description: '80s and 90s movie riddles' },
+      2: { id: 2, name: 'Sports Trivia', description: 'Riddles about various sports' },
+      3: { id: 3, name: 'Games', description: 'Video game and board game riddles' },
+      4: { id: 4, name: 'Coding Knowledge', description: 'Riddles about programming, databases, and APIs' }
+    };
 
     function checkPasscode() {
       const userInput = document.getElementById('password-input').value;
@@ -495,555 +472,215 @@ function displayRiddlePage() {
     }
 
     function startGame() {
-        fetchRiddle();
-        updatePinDisplay();
+      fetchRiddle();
+      updatePinDisplay();
+    }
+    
+    function changeCategory(categoryId) {
+      // Create and submit a form to change category
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.style.display = 'none';
+      
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'category';
+      input.value = categoryId;
+      
+      form.appendChild(input);
+      document.body.appendChild(form);
+      form.submit();
     }
     
     // Create letter input boxes for the riddle answer
     function createLetterInputs(length) {
-        const inputContainer = document.getElementById('answer-inputs');
-        inputContainer.innerHTML = '';
+      const inputContainer = document.getElementById('answer-inputs');
+      inputContainer.innerHTML = '';
+      
+      for (let i = 0; i < length; i++) {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.maxLength = 1;
+        input.className = 'letter-input';
+        input.id = `letter-${i}`;
+        input.dataset.index = i;
+        inputContainer.appendChild(input);
         
-        for (let i = 0; i < length; i++) {
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.maxLength = 1;
-            input.className = 'letter-input';
-            input.id = `letter-${i}`;
-            input.dataset.index = i;
-            inputContainer.appendChild(input);
-            
-            // Add event listeners for keyboard navigation
-            input.addEventListener('input', function(e) {
-                // Move to next input when a character is entered
-                if (input.value.length === 1 && i < length - 1) {
-                    document.getElementById(`letter-${i + 1}`).focus();
-                }
-            });
-            
-            input.addEventListener('keydown', function(e) {
-                // Handle backspace (move to previous input)
-                if (e.key === 'Backspace' && input.value === '' && i > 0) {
-                    document.getElementById(`letter-${i - 1}`).focus();
-                }
-                // Handle Enter key (submit guess)
-                else if (e.key === 'Enter') {
-                    submitGuess();
-                }
-                // Handle arrow keys
-                else if (e.key === 'ArrowRight' && i < length - 1) {
-                    document.getElementById(`letter-${i + 1}`).focus();
-                }
-                else if (e.key === 'ArrowLeft' && i > 0) {
-                    document.getElementById(`letter-${i - 1}`).focus();
-                }
-            });
-        }
+        // Add event listeners for keyboard navigation
+        input.addEventListener('input', function(e) {
+          // Move to next input when a character is entered
+          if (input.value.length === 1 && i < length - 1) {
+            document.getElementById(`letter-${i + 1}`).focus();
+          }
+        });
         
-        // Focus the first input
-        if (length > 0) {
-            document.getElementById('letter-0').focus();
-        }
+        input.addEventListener('keydown', function(e) {
+          // Handle backspace (move to previous input)
+          if (e.key === 'Backspace' && input.value === '' && i > 0) {
+            document.getElementById(`letter-${i - 1}`).focus();
+          }
+          // Handle Enter key (submit guess)
+          else if (e.key === 'Enter') {
+            submitGuess();
+          }
+          // Handle arrow keys
+          else if (e.key === 'ArrowRight' && i < length - 1) {
+            document.getElementById(`letter-${i + 1}`).focus();
+          }
+          else if (e.key === 'ArrowLeft' && i > 0) {
+            document.getElementById(`letter-${i - 1}`).focus();
+          }
+        });
+      }
+      
+      // Focus the first input
+      if (length > 0) {
+        document.getElementById('letter-0').focus();
+      }
     }
 
-    function fetchRiddle(categoryId = null) {
-        let url = "?action=new-riddle";
-        if (categoryId) {
-            url += "&category=" + categoryId;
-        }
-        
-        fetch(url)
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById('riddle-text').textContent = data.riddle;
-                answerLength = data.answerLength;
-                
-                // Create the letter inputs based on answer length
-                createLetterInputs(answerLength);
-                
-                document.getElementById('answer-length').textContent = `[REQUIRED LENGTH: ${answerLength}]`;
-                document.getElementById('result').textContent = '';
-                
-                // Update pins from server response
-                collectedPins = data.pins;
-                updatePinDisplay();
-                
-                // Update category display if provided
-                updateCategoryDisplay(data.category);
-            })
-            .catch(error => {
-                document.getElementById('riddle-text').textContent = 'SYSTEM MALFUNCTION - RETRY';
-                console.error(error);
-            });
-    }
-
-    function updateCategoryDisplay(categoryId) {
-        const categoryDropdown = document.getElementById('category-selector');
-        if (categoryDropdown && categoryId) {
-            categoryDropdown.value = categoryId;
-        }
-    }
-
-    function loadRiddleWithCategory() {
-        const categoryId = document.getElementById('category-selector').value;
-        document.getElementById('riddle-text').textContent = 'ACCESSING RIDDLE DATABASE...';
-        fetchRiddle(categoryId);
+    function fetchRiddle() {
+      fetch("?action=new-riddle")
+        .then(response => response.json())
+        .then(data => {
+          document.getElementById('riddle-text').textContent = data.riddle;
+          answerLength = data.answerLength;
+          currentCategory = data.category;
+          
+          // Update active category in UI
+          document.querySelectorAll('.category-option').forEach(btn => {
+            if (parseInt(btn.onclick.toString().match(/\d+/)[0]) === currentCategory) {
+              btn.classList.add('active');
+            } else {
+              btn.classList.remove('active');
+            }
+          });
+          
+          // Create the letter inputs based on answer length
+          createLetterInputs(answerLength);
+          
+          document.getElementById('answer-length').textContent = `[REQUIRED LENGTH: ${answerLength}]`;
+          document.getElementById('result').textContent = '';
+          
+          // Update pins from server response
+          collectedPins = data.pins;
+          updatePinDisplay();
+        })
+        .catch(error => {
+          document.getElementById('riddle-text').textContent = 'SYSTEM MALFUNCTION - RETRY';
+          console.error(error);
+        });
     }
 
     function loadNewRiddle() {
-        document.getElementById('riddle-text').textContent = 'ACCESSING RIDDLE DATABASE...';
-        const categoryId = document.getElementById('category-selector')?.value || null;
-        fetchRiddle(categoryId);
+      document.getElementById('riddle-text').textContent = 'ACCESSING RIDDLE DATABASE...';
+      fetchRiddle();
     }
 
     function submitGuess() {
-        // Collect letters from all inputs
-        let guess = '';
-        for (let i = 0; i < answerLength; i++) {
-            const input = document.getElementById(`letter-${i}`);
-            guess += input.value || '';
-        }
-        
-        // Check if all fields are filled
-        if (guess.length !== answerLength) {
-            alert(`INPUT MUST BE ${answerLength} CHARACTERS`);
-            return;
-        }
+      // Collect letters from all inputs
+      let guess = '';
+      for (let i = 0; i < answerLength; i++) {
+        const input = document.getElementById(`letter-${i}`);
+        guess += input.value || '';
+      }
+      
+      // Check if all fields are filled
+      if (guess.length !== answerLength) {
+        alert(`INPUT MUST BE ${answerLength} CHARACTERS`);
+        return;
+      }
 
-        fetch("", {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({ guess: guess })
-        })
-        .then(response => response.json())
-        .then(data => {
-            document.getElementById('result').textContent = data.correct ? "+++ ACCESS GRANTED +++" : "!!! INTRUDER ALERT !!!";
+      fetch("", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ guess: guess })
+      })
+      .then(response => response.json())
+      .then(data => {
+        document.getElementById('result').textContent = data.correct ? "+++ ACCESS GRANTED +++" : "!!! INTRUDER ALERT !!!";
+        
+        if (data.correct) {
+          // Show correct answer in green
+          for (let i = 0; i < answerLength; i++) {
+            const input = document.getElementById(`letter-${i}`);
+            input.style.backgroundColor = "#0f0";
+            input.style.color = "#000";
+            input.disabled = true;
+          }
+          
+          if (data.pinAdded) {
+            document.getElementById('result').textContent += " | NEW ACCESS PIN ACQUIRED!";
             
-            if (data.correct) {
-                // Show correct answer in green
-                for (let i = 0; i < answerLength; i++) {
-                    const input = document.getElementById(`letter-${i}`);
-                    input.style.backgroundColor = "#0f0";
-                    input.style.color = "#000";
-                    input.disabled = true;
-                }
-                
-                if (data.pinAdded) {
-                    document.getElementById('result').textContent += " | NEW ACCESS PIN ACQUIRED!";
-                    
-                    // Flash notification with pin
-                    const pinValue = data.pins[data.pins.length - 1];
-                    const notification = document.getElementById('pin-notification');
-                    notification.textContent = `ACCESS PIN ACQUIRED: ${pinValue}`;
-                    notification.style.display = 'block';
-                    
-                    // Hide notification and load new riddle after delay
-                    setTimeout(() => {
-                        notification.style.display = 'none';
-                        loadNewRiddle();
-                    }, 2000);
-                } else {
-                    document.getElementById('result').textContent += " | ALL ACCESS PINS COLLECTED!";
-                }
-                
-                // Update pins display
-                collectedPins = data.pins;
-                updatePinDisplay();
-            } else {
-                // Shake inputs to indicate incorrect answer
-                const inputs = document.querySelectorAll('.letter-input');
-                inputs.forEach(input => {
-                    input.style.backgroundColor = "#300";
-                    setTimeout(() => {
-                        input.style.backgroundColor = "#000";
-                    }, 500);
-                });
-            }
-        });
+            // Flash notification with pin
+            const pinValue = data.pins[data.pins.length - 1];
+            const notification = document.getElementById('pin-notification');
+            notification.textContent = `ACCESS PIN ACQUIRED: ${pinValue}`;
+            notification.style.display = 'block';
+            
+            // Hide notification and load new riddle after delay
+            setTimeout(() => {
+              notification.style.display = 'none';
+              loadNewRiddle();
+            }, 2000);
+          } else {
+            document.getElementById('result').textContent += " | ALL ACCESS PINS COLLECTED!";
+          }
+          
+          // Update pins display
+          collectedPins = data.pins;
+          updatePinDisplay();
+        } else {
+          // Shake inputs to indicate incorrect answer
+          const inputs = document.querySelectorAll('.letter-input');
+          inputs.forEach(input => {
+            input.style.backgroundColor = "#300";
+            setTimeout(() => {
+              input.style.backgroundColor = "#000";
+            }, 500);
+          });
+        }
+      });
     }
     
     function updatePinDisplay() {
-        // Reset all pin slots to placeholders
-        for (let i = 0; i < 3; i++) {
-            const slot = document.getElementById(`pin-slot-${i}`);
-            if (i < collectedPins.length) {
-                // Display collected pin
-                slot.className = "pin";
-                slot.textContent = collectedPins[i];
-            } else {
-                // Display placeholder
-                slot.className = "pin-placeholder";
-                slot.textContent = "";
-            }
+      // Reset all pin slots to placeholders
+      for (let i = 0; i < 3; i++) {
+        const slot = document.getElementById(`pin-slot-${i}`);
+        if (i < collectedPins.length) {
+          // Display collected pin
+          slot.className = "pin";
+          slot.textContent = collectedPins[i];
+        } else {
+          // Display placeholder
+          slot.className = "pin-placeholder";
+          slot.textContent = "";
         }
-        
-        // Show next phase button if all pins are collected
-        document.getElementById('next-phase-button').style.display = 
-            collectedPins.length >= 3 ? 'block' : 'none';
+      }
+      
+      // Show next phase button if all pins are collected
+      document.getElementById('next-phase-button').style.display = 
+        collectedPins.length >= 3 ? 'block' : 'none';
     }
     
     function proceedToMastermind() {
-        window.location.href = "?action=mastermind";
+      window.location.href = "?action=mastermind";
     }
     
     function resetPins() {
-        if (confirm("Are you sure you want to reset your collected pins?")) {
-            window.location.href = "?action=reset-pins";
-        }
+      if (confirm("Are you sure you want to reset your collected pins?")) {
+        window.location.href = "?action=reset-pins";
+      }
     }
     
     // Event listener for Enter key in password field
     document.getElementById('password-input').addEventListener('keydown', function(event) {
-        if (event.key === 'Enter') {
-            checkPasscode();
-        }
-    });
-    
-    // Additional code to make sure category stays selected when loading new riddles
-    document.addEventListener('DOMContentLoaded', function() {
-      if (document.getElementById('category-selector')) {
-        document.getElementById('category-selector').addEventListener('change', function() {
-          // Optional: Auto-load riddle when category changes
-          // loadRiddleWithCategory();
-        });
+      if (event.key === 'Enter') {
+        checkPasscode();
       }
     });
   </script>
 
-</body>
-</html>
-<?php
-}
-
-function displaySuccessPage() {
-    // Check if user has completed the mastermind game (has 3 pins)
-    if (!isset($_SESSION['collected_pins']) || count($_SESSION['collected_pins']) < 3) {
-        header('Location: ?');
-        exit;
-    }
-    
-    // Get pins from session to display in success message
-    $secretCode = implode('', $_SESSION['collected_pins']);
-?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ACCESS GRANTED</title>
-  <link rel="stylesheet" href="mastermind.css">  
-  <style>
-    @keyframes textShadowPulse {
-      0% { text-shadow: 0 0 5px #0f0, 0 0 10px #0f0; }
-      50% { text-shadow: 0 0 15px #0f0, 0 0 25px #0f0, 0 0 35px #0f0; }
-      100% { text-shadow: 0 0 5px #0f0, 0 0 10px #0f0; }
-    }
-    
-    @keyframes crtFlicker {
-      0% { opacity: 0.98; }
-      25% { opacity: 1; }
-      30% { opacity: 0.9; }
-      35% { opacity: 1; }
-      70% { opacity: 0.99; }
-      75% { opacity: 0.9; }
-      76% { opacity: 1; }
-      100% { opacity: 0.98; }
-    }
-    
-    @keyframes glitch {
-      0% { transform: translate(0); }
-      20% { transform: translate(-2px, 2px); }
-      40% { transform: translate(-2px, -2px); }
-      60% { transform: translate(2px, 2px); }
-      80% { transform: translate(2px, -2px); }
-      100% { transform: translate(0); }
-    }
-    
-    @keyframes pixelate {
-      0% { filter: none; }
-      15% { filter: blur(1px); }
-      16% { filter: none; }
-      45% { filter: none; }
-      46% { filter: blur(1px); }
-      48% { filter: none; }
-      100% { filter: none; }
-    }
-    
-    .success-container {
-      text-align: center;
-      padding: 40px;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      animation: crtFlicker 6s infinite, pixelate 8s infinite;
-      overflow: hidden;
-      position: relative;
-    }
-    
-    .success-title {
-      font-size: 3rem;
-      margin-bottom: 30px;
-      animation: textShadowPulse 2s infinite, glitch 3s infinite;
-    }
-    
-    .reward-code {
-      font-size: 2rem;
-      margin: 20px 0;
-      padding: 20px;
-      background-color: #001100;
-      display: inline-block;
-      border: 3px dashed #0f0;
-      animation: textShadowPulse 2s infinite;
-      font-family: 'Courier New', monospace;
-      font-weight: bold;
-      letter-spacing: 2px;
-    }
-    
-    .success-message {
-      font-size: 1.2rem;
-      margin: 20px 0;
-      max-width: 600px;
-      line-height: 1.6;
-    }
-    
-    .arcade-button {
-      background: #000;
-      border: 3px solid #0f0;
-      color: #0f0;
-      padding: 15px 30px;
-      font-size: 1.2rem;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      margin: 20px;
-      font-family: 'Courier New', monospace;
-      text-transform: uppercase;
-      position: relative;
-      overflow: hidden;
-    }
-    
-    .arcade-button:hover {
-      background: #0f0;
-      color: #000;
-      animation: textShadowPulse 1s infinite;
-    }
-    
-    .arcade-button:before {
-      content: '';
-      position: absolute;
-      top: -10px;
-      left: -10px;
-      right: -10px;
-      bottom: -10px;
-      border: 2px dashed #0f0;
-      animation: textShadowPulse 2s infinite;
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.3s ease;
-    }
-    
-    .arcade-button:hover:before {
-      opacity: 1;
-    }
-    
-    .scanline {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(
-        to bottom,
-        rgba(0, 0, 0, 0),
-        rgba(0, 255, 0, 0.1),
-        rgba(0, 0, 0, 0)
-      );
-      pointer-events: none;
-      opacity: 0.7;
-      z-index: 9;
-      animation-name: scanline;
-      animation-duration: 7s;
-      animation-timing-function: linear;
-      animation-iteration-count: infinite;
-    }
-    
-    @keyframes scanline {
-      0% { transform: translateY(-100%); }
-      100% { transform: translateY(100%); }
-    }
-    
-    .stars {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-      z-index: 8;
-      overflow: hidden;
-    }
-    
-    .star {
-      position: absolute;
-      background-color: #0f0;
-      width: 2px;
-      height: 2px;
-      border-radius: 50%;
-      opacity: 0;
-      animation-name: starAnimation;
-      animation-timing-function: linear;
-      animation-iteration-count: infinite;
-    }
-    
-    @keyframes starAnimation {
-      0% {
-        opacity: 0;
-        transform: scale(0);
-      }
-      50% {
-        opacity: 1;
-        transform: scale(1.5);
-      }
-      100% {
-        opacity: 0;
-        transform: scale(0);
-      }
-    }
-    
-    /* Typography with cyberpunk vibes */
-    h1, h2, h3, p {
-      font-family: 'Courier New', monospace;
-      text-transform: uppercase;
-      letter-spacing: 2px;
-    }
-    
-    /* Add some glitch effect to images or icons */
-    .glitch-icon {
-      display: inline-block;
-      margin: 20px;
-      animation: glitch 2s infinite;
-    }
-  </style>
-</head>
-<body>
-  <div class="success-container">
-    <div class="scanline"></div>
-    <div class="stars" id="stars-container"></div>
-    
-    <h1 class="success-title">ACCESS GRANTED</h1>
-    
-    <div class="glitch-icon">
-      <svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="50" cy="50" r="45" stroke="#0f0" stroke-width="3"/>
-        <path d="M30 50 L45 65 L70 35" stroke="#0f0" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-    </div>
-    
-    <p class="success-message">YOU HAVE SUCCESSFULLY BROKEN THE CODE AND ACCESSED THE MAINFRAME.</p>
-    
-    <div class="reward-code">
-      REWARD: BLOCKBUSTER80
-    </div>
-    
-    <p class="success-message">YOUR ACCESS CODE WAS: <?php echo $secretCode; ?></p>
-    
-    <div class="button-container">
-      <button class="arcade-button" onclick="window.location.href='?action=reset-game'">PLAY AGAIN</button>
-      <button class="arcade-button" onclick="window.location.href='/'">MAIN MENU</button>
-    </div>
-  </div>
-  
-  <script>
-    // Create star animation
-    function createStars() {
-      const starsContainer = document.getElementById('stars-container');
-      const numberOfStars = 100;
-      
-      for (let i = 0; i < numberOfStars; i++) {
-        const star = document.createElement('div');
-        star.classList.add('star');
-        
-        // Random position
-        const x = Math.random() * 100;
-        const y = Math.random() * 100;
-        
-        // Random size
-        const size = Math.random() * 3 + 1;
-        
-        // Random duration
-        const duration = Math.random() * 3 + 2;
-        
-        // Random delay
-        const delay = Math.random() * 5;
-        
-        star.style.left = `${x}%`;
-        star.style.top = `${y}%`;
-        star.style.width = `${size}px`;
-        star.style.height = `${size}px`;
-        star.style.animationDuration = `${duration}s`;
-        star.style.animationDelay = `${delay}s`;
-        
-        starsContainer.appendChild(star);
-      }
-    }
-    
-    // Terminal typing effect
-    function typeText(elementId, text, speed) {
-      const element = document.getElementById(elementId);
-      let i = 0;
-      
-      function type() {
-        if (i < text.length) {
-          element.textContent += text.charAt(i);
-          i++;
-          setTimeout(type, speed);
-        }
-      }
-      
-      element.textContent = "";
-      type();
-    }
-    
-    // Run animations on page load
-    document.addEventListener('DOMContentLoaded', function() {
-      createStars();
-      
-      // Optional: Add audio effect
-      try {
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        
-        function playSuccessSound() {
-          const oscillator = audioContext.createOscillator();
-          const gainNode = audioContext.createGain();
-          
-          oscillator.type = 'square';
-          oscillator.frequency.value = 440;
-          gainNode.gain.value = 0.1;
-          
-          oscillator.connect(gainNode);
-          gainNode.connect(audioContext.destination);
-          
-          oscillator.start();
-          
-          // Frequency modulation
-          oscillator.frequency.exponentialRampToValueAtTime(880, audioContext.currentTime + 0.2);
-          oscillator.frequency.exponentialRampToValueAtTime(1760, audioContext.currentTime + 0.4);
-          
-          // End sound
-          gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 1);
-          setTimeout(() => {
-            oscillator.stop();
-          }, 1000);
-        }
-        
-        playSuccessSound();
-      } catch (e) {
-        // Audio context not supported or some other error
-        console.log("Audio not supported in this browser");
-      }
-    });
-  </script>
 </body>
 </html>
 <?php
@@ -1242,7 +879,7 @@ function displayMastermindGame() {
             inputs[0].focus();
         }
     }
-
+    
     function submitGuess() {
         let guess = "";
         for (let i = 0; i < secretCode.length; i++) {
@@ -1266,20 +903,6 @@ function displayMastermindGame() {
             resultDiv.innerHTML = '<span style="color: #0f0; font-size: 1.2em; font-weight: bold;">ACCESS GRANTED! CODE UNLOCKED!</span>';
             document.getElementById('submit-button').disabled = true;
             
-            // Add success button to proceed to success page
-            const successButton = document.createElement('button');
-            successButton.textContent = 'CLAIM REWARD';
-            successButton.style.margin = '15px';
-            successButton.style.background = '#002200';
-            successButton.style.color = '#0f0';
-            successButton.style.border = '2px solid #0f0';
-            successButton.style.padding = '10px 20px';
-            successButton.onclick = function() {
-                window.location.href = '?action=success';
-            };
-            resultDiv.appendChild(document.createElement('br'));
-            resultDiv.appendChild(successButton);
-            
             // Add play again button that resets session
             const playAgainButton = document.createElement('button');
             playAgainButton.textContent = 'PLAY AGAIN';
@@ -1291,8 +914,10 @@ function displayMastermindGame() {
             playAgainButton.onclick = function() {
                 window.location.href = '?action=reset-game';
             };
+            resultDiv.appendChild(document.createElement('br'));
             resultDiv.appendChild(playAgainButton);
             
+            // No redirect - let the player choose to play again
         } else if (attempts >= maxAttempts) {
             resultDiv.innerHTML = `<span style="color: #f00;">GAME OVER! THE CODE WAS: ${secretCode}</span><br>
             <button onclick="window.location.href='?action=reset-game'" style="margin-top:15px; background: #300; color: #f88; border: 1px solid #f00;">PLAY AGAIN</button>`;
@@ -1302,7 +927,7 @@ function displayMastermindGame() {
             clearInputs();
         }
     }
-
+    
     function checkGuess(guess, code) {
         return Array.from(guess).map((digit, index) => digit === code[index] ? 'green' : code.includes(digit) ? 'yellow' : 'gray');
     }
@@ -1390,6 +1015,108 @@ function displayMastermindGame() {
 
     generateInputBoxes(secretCode.length);
    </script>
+</body>
+</html>
+<?php
+}
+
+// Add a function for success.php that includes a reset button
+function createSuccessPage() {
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Access Granted</title>
+    <style>
+        body {
+            background-color: #000;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            text-align: center;
+            padding: 50px;
+            overflow: hidden;
+        }
+        
+        h1 {
+            font-size: 3em;
+            margin-bottom: 30px;
+            text-shadow: 0 0 10px #0f0;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 30px;
+            border: 2px solid #0f0;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+        }
+        
+        .success-message {
+            font-size: 1.5em;
+            margin: 30px 0;
+        }
+        
+        .play-again {
+            display: inline-block;
+            margin-top: 40px;
+            padding: 15px 30px;
+            background-color: #001100;
+            color: #0f0;
+            text-decoration: none;
+            border: 2px solid #0f0;
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .play-again:hover {
+            background-color: #0f0;
+            color: #000;
+        }
+        
+        /* CRT effect */
+        .crt-lines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background: linear-gradient(transparent 50%, rgba(0, 0, 0, 0.05) 50%);
+            background-size: 100% 4px;
+            pointer-events: none;
+        }
+        
+        @keyframes flicker {
+            0% { opacity: 0.97; }
+            5% { opacity: 0.9; }
+            10% { opacity: 0.97; }
+            15% { opacity: 1; }
+            50% { opacity: 0.98; }
+            95% { opacity: 0.9; }
+            100% { opacity: 0.98; }
+        }
+        
+        body {
+            animation: flicker 5s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="crt-lines"></div>
+    
+    <div class="container">
+        <h1>ACCESS GRANTED</h1>
+        
+        <div class="success-message">
+            <p>You've successfully completed all challenges!</p>
+            <p>The retro terminal system has been unlocked.</p>
+        </div>
+        
+        <a href="?action=reset-game" class="play-again">PLAY AGAIN</a>
+    </div>
 </body>
 </html>
 <?php
