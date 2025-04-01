@@ -469,9 +469,10 @@ function displayRiddlePage() {
   </div>
 
   <script>
+    // This should be the actual passcode
     const unlockPasscode = "1234";
     let answerLength = 0;
-    let collectedPins = [];
+    let collectedPins = <?php echo json_encode($_SESSION['collected_pins']); ?>;
     let currentCategory = <?php echo $currentCategoryId; ?>;
     
     // Hardcoded category details (matching PHP)
@@ -671,16 +672,20 @@ function displayRiddlePage() {
           // Update pins display
           collectedPins = data.pins;
           updatePinDisplay();
+          
           // Check if all pins are collected and triggers pop up to give user game flow direction 
-          if(collectedPins.length>=4{
+          if(collectedPins.length >= 4) {
             const notification = document.getElementById('pin-notification');
-            notification.textContent = `ALL PINS COLLECTED! PROCEED TO FINAL PHASE TIME IS RUNNING OUT !`;
+            notification.textContent = `ALL PINS COLLECTED! PROCEED TO FINAL PHASE TIME IS RUNNING OUT!`;
             notification.style.display = 'block';
+            
             // Hide notification and redirect to mastermind after delay
             setTimeout(() => {
-             window.location.ref = "?action=mastermind";
+              notification.style.display = 'none';
+              // Changed from incorrect .ref to .href
+              window.location.href = "?action=mastermind";
             }, 3000);
-          })
+          }
         } else {
           // Shake inputs to indicate incorrect answer
           const inputs = document.querySelectorAll('.letter-input');
@@ -1163,6 +1168,7 @@ function createSuccessPage() {
         
         <div class="success-message">
             <p>You've successfully completed all challenges!</p>
+            <p>THE ACCESS CODE FOR THE NEXT GAME IS : 1234</p>
             <p>The retro terminal system has been unlocked.</p>
         </div>
         
