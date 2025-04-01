@@ -81,7 +81,7 @@ function handleGuessSubmission() {
         // Generate a random pin between 0-9 when a riddle is solved correctly
         $pin = rand(0, 9);
         // Add to the collection (if not already maxed out)
-        if (count($_SESSION['collected_pins']) < 3) {
+        if (count($_SESSION['collected_pins']) < 4) {
             $_SESSION['collected_pins'][] = $pin;
         }
     }
@@ -90,7 +90,7 @@ function handleGuessSubmission() {
     echo json_encode([
         'correct' => $isCorrect,
         'pins' => $_SESSION['collected_pins'],
-        'pinAdded' => $isCorrect && count($_SESSION['collected_pins']) <= 3
+        'pinAdded' => $isCorrect && count($_SESSION['collected_pins']) <= 4
     ]);
     exit;
 }
@@ -456,8 +456,9 @@ function displayRiddlePage() {
         <div class="pin-placeholder" id="pin-slot-0"></div>
         <div class="pin-placeholder" id="pin-slot-1"></div>
         <div class="pin-placeholder" id="pin-slot-2"></div>
+        <div class="pin-placeholder" id="pin-slot-3"></div>
       </div>
-      <p>Solve riddles to collect all 3 access pins then place them in the correct order to unlock the next game</p>
+      <p>Solve riddles to collect all 4 access pins then place them in the correct order to unlock the next game</p>
     </div>
     
     <div class="game-controls">
@@ -671,7 +672,7 @@ function displayRiddlePage() {
           collectedPins = data.pins;
           updatePinDisplay();
           // Check if all pins are collected and triggers pop up to give user game flow direction 
-          if(collectedPins.length>=3{
+          if(collectedPins.length>=4{
             const notification = document.getElementById('pin-notification');
             notification.textContent = `ALL PINS COLLECTED! PROCEED TO FINAL PHASE TIME IS RUNNING OUT !`;
             notification.style.display = 'block';
@@ -695,7 +696,7 @@ function displayRiddlePage() {
     
     function updatePinDisplay() {
       // Reset all pin slots to placeholders
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < 4; i++) {
         const slot = document.getElementById(`pin-slot-${i}`);
         if (i < collectedPins.length) {
           // Display collected pin
@@ -710,7 +711,7 @@ function displayRiddlePage() {
       
       // Show next phase button if all pins are collected
       document.getElementById('next-phase-button').style.display = 
-        collectedPins.length >= 3 ? 'block' : 'none';
+        collectedPins.length >= 4 ? 'block' : 'none';
     }
     
     function proceedToMastermind() {
@@ -742,7 +743,7 @@ function displayMastermindGame() {
     $secretCode = implode('', $pins);
     
     // If no pins collected, redirect back to riddle page
-    if (count($pins) < 3) {
+    if (count($pins) < 4) {
         header('Location: ?');
         exit;
     }
