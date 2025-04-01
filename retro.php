@@ -670,6 +670,16 @@ function displayRiddlePage() {
           // Update pins display
           collectedPins = data.pins;
           updatePinDisplay();
+          // Check if all pins are collected and triggers pop up to give user game flow direction 
+          if(collectedPins.length>=3{
+            const notification = document.getElementById('pin-notification');
+            notification.textContent = `ALL PINS COLLECTED! PROCEED TO FINAL PHASE TIME IS RUNNING OUT !`;
+            notification.style.display = 'block';
+            // Hide notification and redirect to mastermind after delay
+            setTimeout(() => {
+             window.location.ref = "?action=mastermind";
+            }, 3000);
+          })
         } else {
           // Shake inputs to indicate incorrect answer
           const inputs = document.querySelectorAll('.letter-input');
