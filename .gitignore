@@ -8,9 +8,6 @@
 .AppleDouble
 .LSOverride
 
-# Thumbnails
-._*
-
 # Files that might appear in the root of a volume
 .DocumentRevisions-V100
 .fseventsd
@@ -19,13 +16,6 @@
 .Trashes
 .VolumeIcon.icns
 .com.apple.timemachine.donotpresent
-
-# Directories potentially created on remote AFP share
-.AppleDB
-.AppleDesktop
-Network Trash Folder
-Temporary Items
-.afs3-resync
 
 # IDE
 .vscode/
@@ -46,15 +36,3 @@ vendor/
 
 # Optional npm cache directory
 .npm
-
-# Optional eslint cache
-.eslintcache
-
-# Backup files
-*.bak
-*.backup
-*~
-
-# Temporary files
-tmp/
-temp/
